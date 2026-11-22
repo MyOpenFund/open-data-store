@@ -36,11 +36,11 @@ jobs:
       - uses: actions/checkout@v5
       - name: the stack starts from nothing, creates its roles and dumps its catalogue
         run: |
-          mkdir -p "$RUNNER_TEMP/mod/data"
-          cat > "$RUNNER_TEMP/mod/.env" <<EOF
+          mkdir -p "$RUNNER_TEMP/stack/data"
+          cat > "$RUNNER_TEMP/stack/.env" <<EOF
           # this job never runs install or publish: the value only has to be set
           OPEN_DATA_STORE_REF=${GITHUB_SHA}
-          OPEN_DATA_STORE_HOST_DIR=$RUNNER_TEMP/mod/data
+          OPEN_DATA_STORE_HOST_DIR=$RUNNER_TEMP/stack/data
           OPEN_DATA_STORE_UID_GID=$(id -u):$(id -g)
           OPEN_DATA_STORE_PG_BIND=127.0.0.1:5433
           OPEN_DATA_STORE_CATALOG_DB=lake_catalog
@@ -50,18 +50,20 @@ jobs:
           OPEN_DATA_STORE_APPROVE=
           OPEN_DATA_STORE_APPROVED_BY=
           EOF
-          dc="docker compose -f deploy/nas/compose.yaml --env-file $RUNNER_TEMP/mod/.env"
+          dc="docker compose -f deploy/nas/compose.yaml --env-file $RUNNER_TEMP/stack/.env"
           $dc up -d --wait catalog
           $dc run --rm backup
           $dc run --rm init
-          test -s "$(ls "$RUNNER_TEMP"/mod/data/backups/lake_catalog-*.dump | head -n 1)"
+          test -s "$(ls "$RUNNER_TEMP"/stack/data/backups/lake_catalog-*.dump | head -n 1)"
           docker run --rm --network host -e PGPASSWORD=ci-reader postgres:16 \
             psql -h 127.0.0.1 -p 5433 -U lake_reader -d lake_catalog -Atc "SELECT 1"
           $dc down -v
       - name: a dump restores into a fresh stack, readable by lake_reader (stack migration path)
         run: |
+          # Probes the operator path (dump, fresh stack, init, pg_restore as lake_publisher, read as
+          # lake_reader) on a plain table; a real DuckLake catalogue is restored the same way.
           mkdir -p "$RUNNER_TEMP/rst/data"
-          sed "s#$RUNNER_TEMP/mod/data#$RUNNER_TEMP/rst/data#" "$RUNNER_TEMP/mod/.env" > "$RUNNER_TEMP/rst/.env"
+          sed "s#$RUNNER_TEMP/stack/data#$RUNNER_TEMP/rst/data#" "$RUNNER_TEMP/stack/.env" > "$RUNNER_TEMP/rst/.env"
           dc="docker compose -f deploy/nas/compose.yaml --env-file $RUNNER_TEMP/rst/.env"
           pub() { docker run --rm --network host -e PGPASSWORD=ci-publisher postgres:16 \
             psql -h 127.0.0.1 -p 5433 -U lake_publisher -d lake_catalog -v ON_ERROR_STOP=1 -Atc "$1"; }

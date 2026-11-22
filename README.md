@@ -84,10 +84,10 @@ The writer validates the table against its contract and drops an atomic, idempot
 
 ```
 open-data-store contracts list
-open-data-store contracts approve fundamentals 3 --by <name>   # reviewed step; refuses conflicting definitions
+open-data-store contracts approve fundamentals 3 --by <name>        # reviewed step; refuses conflicting definitions
 open-data-store contracts approve filing_statements 1 --by <name>   # likewise, for a store that publishes it
 open-data-store contracts approve filings 1 --by <name>             # likewise
-open-data-store publish                                          # exit 0 ok · 1 fatal · 3 degraded
+open-data-store publish                                             # exit 0 ok · 1 fatal · 3 degraded
 ```
 
 `publish` audits every landed batch again (file checksum, contract, recomputed batch id),

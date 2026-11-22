@@ -18,26 +18,26 @@ publisher. It runs the same on a laptop, a NAS or a rented server.
    the exit status. After a failed backup the `publish` container still shows its previous run's
    exit status: check `backup`'s status and the timestamps first.
 3. Approve each contract once, before its first publish: set `OPEN_DATA_STORE_APPROVE` and
-   `OPEN_DATA_STORE_APPROVED_BY` in `.env`, start again. Approving again is a no-op. Do it before the
-   first batches land (or start the stack once with an empty `landing/` and the approvals set).
+   `OPEN_DATA_STORE_APPROVED_BY` in `.env`, start again. Approving again is a no-op. Do it before
+   the first batches land (or start the stack once with an empty `landing/` and the approvals set).
    A batch published without an approved contract is quarantined and moved to
    `landing/_quarantine/`; `push_landing.py` will not copy it again, so move it back into
    `landing/<table>/` by hand once the contract is approved.
 4. To publish again, put new batches in `landing/` and start the stack again.
 
-Producers on the same machine write into `<OPEN_DATA_STORE_HOST_DIR>/landing`. Producers elsewhere write
-to a local landing and copy it with `push_landing.py SRC DEST` (for example to an SMB mount): one
-atomic rename per batch, so the publisher never sees half a batch.
+Producers on the same machine write into `<OPEN_DATA_STORE_HOST_DIR>/landing`. Producers elsewhere
+write to a local landing and copy it with `push_landing.py SRC DEST` (for example to an SMB mount):
+one atomic rename per batch, so the publisher never sees half a batch.
 
-Readers elsewhere connect as `lake_reader` on `OPEN_DATA_STORE_PG_BIND` and set `OPEN_DATA_STORE_DATA_ROOT`
-to where they see the same files; read-only sessions accept a data path that differs from the
-publisher's.
+Readers elsewhere connect as `lake_reader` on `OPEN_DATA_STORE_PG_BIND` and set
+`OPEN_DATA_STORE_DATA_ROOT` to where they see the same files; read-only sessions accept a data path
+that differs from the publisher's.
 
 Backups: the catalogue's Postgres data lives in the Docker volume `<project>_pgdata`, outside
 `OPEN_DATA_STORE_HOST_DIR`, because Postgres must `chmod 0700` its data directory and datasets with
-NFSv4 ACLs (typical of SMB shares, e.g. TrueNAS) refuse it; a bind mount to a POSIX directory
-would also work. Your machine's snapshots of `OPEN_DATA_STORE_HOST_DIR` therefore cover the files and
-the dumps, not the live catalogue: the dump in `backups/` is the catalogue's backup. `backup` runs
+NFSv4 ACLs (typical of SMB shares, e.g. TrueNAS) refuse it; a bind mount to a POSIX directory would
+also work. Your machine's snapshots of `OPEN_DATA_STORE_HOST_DIR` therefore cover the files and the
+dumps, not the live catalogue: the dump in `backups/` is the catalogue's backup. `backup` runs
 before `publish`, so the newest dump never holds the latest publish. Dumps accumulate, one per
 start; prune `backups/` yourself.
 
