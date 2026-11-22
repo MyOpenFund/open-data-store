@@ -1,4 +1,4 @@
-"""Copy finished my-open-data batches from a local landing zone to a remote landing over SMB.
+"""Copy finished open-data-store batches from a local landing zone to a remote landing over SMB.
 
 The writer needs its landing zone on a local or NFS filesystem, and the NAS is reachable from the
 Mac over SMB only. So producers write locally, and this script copies each finished batch to
@@ -95,7 +95,7 @@ def push(src: Path, dest: Path, *, dry_run: bool = False) -> PushReport:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("src", type=Path, help="local landing zone (MYOPENDATA_DATA_ROOT/landing)")
+    p.add_argument("src", type=Path, help="local landing zone (OPEN_DATA_STORE_DATA_ROOT/landing)")
     p.add_argument("dest", type=Path, help="remote landing zone, e.g. on an SMB mount")
     p.add_argument("--dry-run", action="store_true", help="list what would be copied")
     a = p.parse_args(argv)

@@ -18,7 +18,7 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      MYOPENDATA_TEST_PG: "host=localhost port=5432 user=postgres dbname=postgres"
+      OPEN_DATA_STORE_TEST_PG: "host=localhost port=5432 user=postgres dbname=postgres"
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -39,16 +39,16 @@ jobs:
           mkdir -p "$RUNNER_TEMP/mod/data"
           cat > "$RUNNER_TEMP/mod/.env" <<EOF
           # this job never runs install or publish: the value only has to be set
-          MYOPENDATA_REF=${GITHUB_SHA}
-          MYOPENDATA_HOST_DIR=$RUNNER_TEMP/mod/data
-          MYOPENDATA_UID_GID=$(id -u):$(id -g)
-          MYOPENDATA_PG_BIND=127.0.0.1:5433
-          MYOPENDATA_CATALOG_DB=lake_catalog
-          MYOPENDATA_ADMIN_PASSWORD=ci-admin
-          MYOPENDATA_PUBLISHER_PASSWORD=ci-publisher
-          MYOPENDATA_READER_PASSWORD=ci-reader
-          MYOPENDATA_APPROVE=
-          MYOPENDATA_APPROVED_BY=
+          OPEN_DATA_STORE_REF=${GITHUB_SHA}
+          OPEN_DATA_STORE_HOST_DIR=$RUNNER_TEMP/mod/data
+          OPEN_DATA_STORE_UID_GID=$(id -u):$(id -g)
+          OPEN_DATA_STORE_PG_BIND=127.0.0.1:5433
+          OPEN_DATA_STORE_CATALOG_DB=lake_catalog
+          OPEN_DATA_STORE_ADMIN_PASSWORD=ci-admin
+          OPEN_DATA_STORE_PUBLISHER_PASSWORD=ci-publisher
+          OPEN_DATA_STORE_READER_PASSWORD=ci-reader
+          OPEN_DATA_STORE_APPROVE=
+          OPEN_DATA_STORE_APPROVED_BY=
           EOF
           dc="docker compose -f deploy/nas/compose.yaml --env-file $RUNNER_TEMP/mod/.env"
           $dc up -d --wait catalog

@@ -2,8 +2,8 @@
 
 import pyarrow as pa
 
-from myopendata.contracts.base import Column, Contract
-from myopendata.contracts.standard._common import BITEMPORAL_COLUMNS, ID_SCHEMES
+from open_data_store.contracts.base import Column, Contract
+from open_data_store.contracts.standard._common import BITEMPORAL_COLUMNS, ID_SCHEMES
 
 STATEMENTS = ("BS", "IS", "CF")
 
@@ -11,7 +11,7 @@ FILING_STATEMENTS = Contract(
     name="filing_statements",
     version="1.0.0",
     kind="fact",
-    owner="my-open-data",
+    owner="open-data-store",
     licence="per-source; see source_code",
     doc=(
         "Which tag appears on which primary statement of one filing. One row per tag per "

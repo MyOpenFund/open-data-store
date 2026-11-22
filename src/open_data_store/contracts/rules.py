@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 import pyarrow as pa
 import pyarrow.compute as pc
 
-from myopendata.contracts.base import Contract, ContractError
+from open_data_store.contracts.base import Contract, ContractError
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{1,62}$")
 SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
@@ -17,7 +17,7 @@ KNOWN_AT_KINDS = ("published", "collected")
 # Identifier schemes the publisher can resolve (common rule, spec §6.1). The standard contracts
 # list them as their `allowed` vocabulary. Appending a scheme at the end is a vocabulary MINOR of
 # those contracts (auto-approved with a version bump); whether a scheme actually resolves
-# entities is decided separately by MYOPENDATA_RESOLVING_SCHEMES (config.py). Removing or
+# entities is decided separately by OPEN_DATA_STORE_RESOLVING_SCHEMES (config.py). Removing or
 # reordering schemes stays a MAJOR.
 ID_SCHEMES = ("cik", "lei", "isin", "figi", "ticker", "cb_code", "national_id")
 IDENTITY_COLUMNS = ("subject_scheme", "subject_value", "id_scheme", "id_value", "name", "country")

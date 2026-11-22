@@ -6,8 +6,8 @@ from decimal import Decimal
 import pyarrow as pa
 import pytest
 
-from myopendata.config import StoreConfig
-from myopendata.contracts.standard import ENTITY_OBSERVATIONS, FUNDAMENTALS
+from open_data_store.config import StoreConfig
+from open_data_store.contracts.standard import ENTITY_OBSERVATIONS, FUNDAMENTALS
 
 NOW = datetime(2026, 11, 1, 12, 0, tzinfo=UTC)
 
@@ -25,9 +25,9 @@ def cfg(tmp_path):
 
 @pytest.fixture
 def pg_cfg(tmp_path):
-    dsn = os.environ.get("MYOPENDATA_TEST_PG")
+    dsn = os.environ.get("OPEN_DATA_STORE_TEST_PG")
     if not dsn:
-        pytest.skip("MYOPENDATA_TEST_PG not set")
+        pytest.skip("OPEN_DATA_STORE_TEST_PG not set")
     import duckdb
 
     db = f"t_{uuid.uuid4().hex[:8]}"
@@ -45,7 +45,7 @@ def pg_cfg(tmp_path):
 
 @pytest.fixture
 def approved(cfg):
-    from myopendata.publisher import approve_contract
+    from open_data_store.publisher import approve_contract
 
     approve_contract(cfg, ENTITY_OBSERVATIONS, "test")
     approve_contract(cfg, FUNDAMENTALS, "test")

@@ -7,8 +7,8 @@ import hashlib
 import duckdb
 import pyarrow as pa
 
-from myopendata.config import DEFAULT_RESOLVING_SCHEMES, DEFAULT_SINGLE_VALUED_SCHEMES
-from myopendata.lake import registered
+from open_data_store.config import DEFAULT_RESOLVING_SCHEMES, DEFAULT_SINGLE_VALUED_SCHEMES
+from open_data_store.lake import registered
 
 # Non-resolving schemes (tickers) never merge entities and never key the identifier links; they
 # stay visible in the identity dataset itself. Policy comes from StoreConfig.

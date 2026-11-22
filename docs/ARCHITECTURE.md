@@ -5,7 +5,7 @@
 ```
 producer ──writer──▶ landing/<table>/<batch_id>/{data.parquet, batch.json}
                          │
-                         ▼  myopendata publish   (the only writer to the lake; one run at a time)
+                         ▼  open-data-store publish   (the only writer to the lake; one run at a time)
              audit ─▶ landing/_quarantine/  (reason.json)    replays ─▶ landing/_duplicates/
                │
                ▼  one DuckLake transaction per batch, then the batch moves to landing/_published/
@@ -15,7 +15,7 @@ producer ──writer──▶ landing/<table>/<batch_id>/{data.parquet, batch.j
          reader (read-only, sandboxed): read_asof · assemble · export
 ```
 
-* **Producers** use `myopendata.writer` (pyarrow only). They never touch Postgres. A batch
+* **Producers** use `open_data_store.writer` (pyarrow only). They never touch Postgres. A batch
   directory appears atomically (written under `.tmp-*`, fsynced, renamed); this needs the landing
   zone on one local or NFS filesystem.
 * **The publisher** re-reads every batch and trusts nothing in its manifest: it checks the file
@@ -81,7 +81,7 @@ latest row with `known_at <= t`. The same key cannot hold two values at one `kno
 publisher quarantines such a batch (`conflicting_republish`), so a correction always carries a
 later `known_at`. (The reader still orders ties by publication time, for rows published before
 this rule.) DuckLake snapshots are the audit trail: `read_asof(..., snapshot=n)` shows what the store held at version `n`. Every
-result carries `myopendata.as_of` (and snapshot / recipe) in its schema metadata.
+result carries `open_data_store.as_of` (and snapshot / recipe) in its schema metadata.
 
 A recipe input named `name:vintages` (or `name_vN:vintages`) gets every row knowable at the date
 instead of the latest per key, for a recipe that compares a value with the one it replaced
@@ -94,7 +94,7 @@ instead of the latest per key, for a recipe that compares a value with the one i
   mandatory licence and owner, identifier schemes, reserved columns `entity_id` / `batch_id`.
 * Standard contracts ship with the library (`fundamentals`, `entity_observations`,
   `filing_statements`, `filings`); producers declare
-  their own through the `myopendata.contracts` entry-point group (the spec's working name was
+  their own through the `open_data_store.contracts` entry-point group (the spec's working name was
   `myopenfund.datasets`).
 * `fundamentals` (3 is the major, 3.1.0 the current version) keeps facts as filed, keyed by tag:
   the natural key uses `original_tag` (`ns:Tag`, required), and `filing_ref` (nullable) carries
@@ -115,7 +115,7 @@ instead of the latest per key, for a recipe that compares a value with the one i
   re-listed under another filing date is a second row (the key includes `valid_date`) and readers
   see both; another `form` or `report_date` for the same key and `known_at` quarantines the batch
   (`conflicting_republish`).
-* A contract version is publishable once approved (`myopendata contracts approve NAME MAJOR`).
+* A contract version is publishable once approved (`open-data-store contracts approve NAME MAJOR`).
   A strictly additive MINOR (new nullable columns appended and/or new values appended after the
   existing ones of a column's non-empty vocabulary, everything else equal, higher version) is
   auto-approved; a vocabulary cannot be created, narrowed, renamed or reordered in a MINOR. Any
@@ -137,8 +137,8 @@ instead of the latest per key, for a recipe that compares a value with the one i
   the touched entities, so a backfill lands in the right interval. It is **current knowledge**,
   not as-of: joining it in a historical read can show a name learnt later. For look-ahead-free
   identity, read `entity_observations` with `read_asof` (an as-of entity reader comes later).
-* The policy is configuration: `MYOPENDATA_RESOLVING_SCHEMES` and
-  `MYOPENDATA_SINGLE_VALUED_SCHEMES` (comma-separated). Extending the identifier vocabulary
+* The policy is configuration: `OPEN_DATA_STORE_RESOLVING_SCHEMES` and
+  `OPEN_DATA_STORE_SINGLE_VALUED_SCHEMES` (comma-separated). Extending the identifier vocabulary
   itself changes the standard contracts' fingerprint, so it ships as a new major of them.
 * A contract marks itself as an identity dataset with `resolves_entities=True`; it is published
   before other data in each run.
@@ -182,7 +182,7 @@ on the window's partition key, the natural key, by itself; the explicit push gua
 the optimizer version. Do not merge data files without measuring.
 
 A reader may see the lake's files under another path than the publisher (a publisher on a
-server, a reader on a mounted share): set its `MYOPENDATA_DATA_ROOT` to where it sees them.
+server, a reader on a mounted share): set its `OPEN_DATA_STORE_DATA_ROOT` to where it sees them.
 Read-only sessions attach with DuckLake's `OVERRIDE_DATA_PATH`; the publisher never does, so a
 misconfigured publisher fails instead of writing files elsewhere. To run a store on a server (Postgres
 catalogue, publisher, backups), see `deploy/nas/README.md`.

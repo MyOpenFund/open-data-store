@@ -4,14 +4,14 @@ import dataclasses
 
 import pyarrow as pa
 
-from myopendata.contracts.base import Column, Contract
-from myopendata.contracts.standard._common import BITEMPORAL_COLUMNS, ID_SCHEMES
+from open_data_store.contracts.base import Column, Contract
+from open_data_store.contracts.standard._common import BITEMPORAL_COLUMNS, ID_SCHEMES
 
 FILINGS = Contract(
     name="filings",
     version="1.0.0",
     kind="fact",
-    owner="my-open-data",
+    owner="open-data-store",
     licence="per-source; see source_code",
     doc=(
         "One row per filing a producer knows of: its form and the period it reports on, as "

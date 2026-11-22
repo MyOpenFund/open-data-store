@@ -1,4 +1,4 @@
-from myopendata.publisher.publish import (
+from open_data_store.publisher.publish import (
     ApprovalRefused,
     PublishReport,
     approve_contract,

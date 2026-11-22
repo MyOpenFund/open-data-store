@@ -8,9 +8,9 @@ import pytest
 from conftest import NOW, fund_row, obs_rows
 from test_publisher import land
 
-from myopendata.config import StoreConfig
-from myopendata.contracts.standard import ENTITY_OBSERVATIONS, FUNDAMENTALS
-from myopendata.publisher import approve_contract, publish_pending
+from open_data_store.config import StoreConfig
+from open_data_store.contracts.standard import ENTITY_OBSERVATIONS, FUNDAMENTALS
+from open_data_store.publisher import approve_contract, publish_pending
 
 _PATH = Path(__file__).parents[1] / "deploy" / "nas" / "push_landing.py"
 _spec = importlib.util.spec_from_file_location("push_landing", _PATH)

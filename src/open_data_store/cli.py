@@ -1,16 +1,16 @@
-"""myopendata CLI: contracts list|approve, publish."""
+"""open-data-store CLI: contracts list|approve, publish."""
 
 from __future__ import annotations
 
 import argparse
 import sys
 
-from myopendata.config import StoreConfig
-from myopendata.contracts.registry import discover_contracts
+from open_data_store.config import StoreConfig
+from open_data_store.contracts.registry import discover_contracts
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="myopendata")
+    p = argparse.ArgumentParser(prog="open-data-store")
     sub = p.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("contracts")
     csub = c.add_subparsers(dest="action", required=True)
@@ -37,13 +37,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     if a.cmd == "contracts" and a.action == "approve":
-        from myopendata.publisher import approve_contract
+        from open_data_store.publisher import approve_contract
 
         ct = discover_contracts().get((a.name, a.major))
         if ct is None:
             print(f"error: unknown contract {a.name}_v{a.major}", file=sys.stderr)
             return 1
-        from myopendata.publisher import ApprovalRefused
+        from open_data_store.publisher import ApprovalRefused
 
         try:
             state = approve_contract(cfg, ct, a.by, force=a.force)
@@ -52,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(f"{state} {a.name}_v{a.major} {ct.version} {ct.fingerprint()[:12]}")
         return 0
-    from myopendata.publisher import publish_pending
+    from open_data_store.publisher import publish_pending
 
     rep = publish_pending(cfg)
     print(rep.to_json())

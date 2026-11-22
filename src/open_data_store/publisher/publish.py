@@ -22,12 +22,12 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
-from myopendata.config import StoreConfig
-from myopendata.contracts.base import Contract
-from myopendata.contracts.registry import discover_contracts
-from myopendata.contracts.rules import RESERVED, BatchInvalid, conform, validate_contract
-from myopendata.lake import LAKE, connect, qualified, quote_ident, registered
-from myopendata.publisher.entities import (
+from open_data_store.config import StoreConfig
+from open_data_store.contracts.base import Contract
+from open_data_store.contracts.registry import discover_contracts
+from open_data_store.contracts.rules import RESERVED, BatchInvalid, conform, validate_contract
+from open_data_store.lake import LAKE, connect, qualified, quote_ident, registered
+from open_data_store.publisher.entities import (
     EntityConflict,
     UnresolvableSubject,
     load_links,
@@ -35,7 +35,7 @@ from myopendata.publisher.entities import (
     resolve_facts,
     resolve_observations,
 )
-from myopendata.writer.batch import DATA, MANIFEST, batch_id_for, content_hash, file_sha256
+from open_data_store.writer.batch import DATA, MANIFEST, batch_id_for, content_hash, file_sha256
 
 EXIT_OK, EXIT_FATAL, EXIT_DEGRADED = 0, 1, 3  # silent-failure doctrine
 BATCH_ID_RE = re.compile(r"[0-9a-f]{32}")
@@ -566,7 +566,7 @@ class _Run:
                 ],
             )
             con.execute(
-                "CALL lake.set_commit_message('my-open-data publisher', ?, extra_info => ?)",
+                "CALL lake.set_commit_message('open-data-store publisher', ?, extra_info => ?)",
                 [
                     f"publish {c.table_name} {bid}",
                     json.dumps({"batch_id": bid, "run_id": self.rep.run_id}),

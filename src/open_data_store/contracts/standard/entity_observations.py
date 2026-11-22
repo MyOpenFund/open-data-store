@@ -1,13 +1,13 @@
 import pyarrow as pa
 
-from myopendata.contracts.base import Column, Contract
-from myopendata.contracts.standard._common import BITEMPORAL_COLUMNS, ID_SCHEMES
+from open_data_store.contracts.base import Column, Contract
+from open_data_store.contracts.standard._common import BITEMPORAL_COLUMNS, ID_SCHEMES
 
 ENTITY_OBSERVATIONS = Contract(
     name="entity_observations",
     version="1.0.0",
     kind="fact",
-    owner="my-open-data",
+    owner="open-data-store",
     licence="per-source; see source_code",
     doc=(
         "One row = one identifier a producer observed for one subject entity, as of valid_date. "

@@ -1,7 +1,7 @@
 import pyarrow as pa
 
-from myopendata.contracts.base import Column, Contract
-from myopendata.contracts.standard._common import BITEMPORAL_COLUMNS, ID_SCHEMES
+from open_data_store.contracts.base import Column, Contract
+from open_data_store.contracts.standard._common import BITEMPORAL_COLUMNS, ID_SCHEMES
 
 EXTRACTION_METHODS = ("xbrl_filed", "xbrl_inline", "ocr", "vendor_api", "register_api", "manual")
 # frequency = the period the value covers. Durations: quarterly (~3 months), semiannual
@@ -17,7 +17,7 @@ FUNDAMENTALS = Contract(
     name="fundamentals",
     version="3.1.0",
     kind="fact",
-    owner="my-open-data",
+    owner="open-data-store",
     licence="per-source; see source_code",
     doc=(
         "Reported (filed) financial facts as filed, one row per entity/tag/period/basis/source. "

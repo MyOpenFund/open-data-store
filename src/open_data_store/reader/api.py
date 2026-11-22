@@ -25,8 +25,8 @@ import pyarrow as pa
 import pyarrow.csv as pcsv
 import pyarrow.parquet as pq
 
-from myopendata.config import StoreConfig
-from myopendata.lake import LAKE, connect, qualified, quote_ident
+from open_data_store.config import StoreConfig
+from open_data_store.lake import LAKE, connect, qualified, quote_ident
 
 VIEW_RE = re.compile(r"[a-z_][a-z0-9_]{0,62}")
 XLSX_MAX_ROWS = 1_048_575  # Excel's sheet limit minus the header row
@@ -353,11 +353,11 @@ def _semver(v: str) -> tuple[int, ...]:
 
 def _stamp(t: pa.Table, as_of: datetime, snapshot: int | None, recipe: Recipe | None = None):
     """Record what the result was computed from, so an answer can be reproduced."""
-    meta = {"myopendata.as_of": as_of.astimezone(UTC).isoformat()}
+    meta = {"open_data_store.as_of": as_of.astimezone(UTC).isoformat()}
     if snapshot is not None:
-        meta["myopendata.snapshot"] = str(snapshot)
+        meta["open_data_store.snapshot"] = str(snapshot)
     if recipe is not None:
-        meta["myopendata.recipe"] = f"{recipe.name}@{recipe.version}"
+        meta["open_data_store.recipe"] = f"{recipe.name}@{recipe.version}"
     return t.replace_schema_metadata({**(t.schema.metadata or {}), **meta})
 
 

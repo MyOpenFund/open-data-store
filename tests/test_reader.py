@@ -5,9 +5,9 @@ import pytest
 from conftest import NOW, fund_row, obs_rows, ts
 from test_publisher import land
 
-from myopendata.contracts.standard import ENTITY_OBSERVATIONS, FUNDAMENTALS
-from myopendata.publisher import publish_pending
-from myopendata.reader import Recipe, Store, export
+from open_data_store.contracts.standard import ENTITY_OBSERVATIONS, FUNDAMENTALS
+from open_data_store.publisher import publish_pending
+from open_data_store.reader import Recipe, Store, export
 
 
 @pytest.fixture
@@ -212,12 +212,12 @@ def test_recipe_with_two_inputs(store):
     )
     t = store.assemble(r, ts("2025-12-01T00:00:00"))
     assert t.to_pylist() == [{"name": "MICROSOFT CORP"}]
-    assert t.schema.metadata[b"myopendata.recipe"] == b"named@1.0.0"
+    assert t.schema.metadata[b"open_data_store.recipe"] == b"named@1.0.0"
 
 
 @pytest.mark.parametrize("name", ["nope", "fundamentals_v9"])
 def test_unknown_dataset_or_major(store, name):
-    from myopendata.reader.api import UnknownDataset
+    from open_data_store.reader.api import UnknownDataset
 
     with pytest.raises(UnknownDataset):
         store.read_asof(name)
@@ -230,7 +230,7 @@ def test_bool_snapshot_rejected(store):
 
 def test_result_records_its_as_of(store):
     t = store.read_asof("fundamentals", ts("2025-12-01T00:00:00"))
-    assert t.schema.metadata[b"myopendata.as_of"] == b"2025-12-01T00:00:00+00:00"
+    assert t.schema.metadata[b"open_data_store.as_of"] == b"2025-12-01T00:00:00+00:00"
 
 
 def test_datasets_carry_name_version_and_licence(store):
@@ -254,7 +254,7 @@ def test_xlsx_export_writes_utc_timestamps_and_numbers(store, tmp_path):
 def test_xlsx_row_limit(tmp_path):
     import pyarrow as pa
 
-    from myopendata.reader.api import XLSX_MAX_ROWS
+    from open_data_store.reader.api import XLSX_MAX_ROWS
 
     big = pa.table({"x": pa.array(range(XLSX_MAX_ROWS + 1))})
     with pytest.raises(ValueError, match="Excel"):
@@ -318,8 +318,8 @@ def test_approved_but_unpublished_minor_columns_are_not_offered(store, approved)
 
     import pyarrow as pa
 
-    from myopendata.contracts.base import Column
-    from myopendata.publisher import approve_contract
+    from open_data_store.contracts.base import Column
+    from open_data_store.publisher import approve_contract
 
     store.close()
     minor = dataclasses.replace(
@@ -337,8 +337,8 @@ def test_approved_but_unpublished_minor_columns_are_not_offered(store, approved)
 def test_a_recipe_joins_facts_with_their_statement_position(approved):
     from conftest import statement_row
 
-    from myopendata.contracts.standard import FILING_STATEMENTS
-    from myopendata.publisher import approve_contract
+    from open_data_store.contracts.standard import FILING_STATEMENTS
+    from open_data_store.publisher import approve_contract
 
     approve_contract(approved, FILING_STATEMENTS, "test")
     land(approved, ENTITY_OBSERVATIONS, [obs_rows()])
@@ -362,8 +362,8 @@ def test_a_recipe_joins_facts_with_their_statement_position(approved):
 def test_filings_publish_replay_and_join_the_facts(approved):
     from conftest import filing_row
 
-    from myopendata.contracts.standard import FILINGS
-    from myopendata.publisher import approve_contract
+    from open_data_store.contracts.standard import FILINGS
+    from open_data_store.publisher import approve_contract
 
     approve_contract(approved, FILINGS, "test")
     land(approved, ENTITY_OBSERVATIONS, [obs_rows()])
@@ -408,7 +408,7 @@ def test_reader_reads_files_seen_under_another_path(approved, tmp_path):
     """A NAS publisher writes under /data; a Mac reader sees the same files under a share."""
     import shutil
 
-    from myopendata.config import StoreConfig
+    from open_data_store.config import StoreConfig
 
     land(approved, ENTITY_OBSERVATIONS, [obs_rows()])
     land(approved, FUNDAMENTALS, [fund_row()])
@@ -428,8 +428,8 @@ def test_writer_whose_data_root_moved_fails(approved, tmp_path):
 
     import duckdb
 
-    from myopendata.config import StoreConfig
-    from myopendata.lake import connect
+    from open_data_store.config import StoreConfig
+    from open_data_store.lake import connect
 
     land(approved, ENTITY_OBSERVATIONS, [obs_rows()])
     land(approved, FUNDAMENTALS, [fund_row()])
@@ -444,8 +444,8 @@ _TZ_PROBE = """
 import json, sys
 from datetime import UTC, datetime
 from pathlib import Path
-from myopendata.config import StoreConfig
-from myopendata.reader import Recipe, Store
+from open_data_store.config import StoreConfig
+from open_data_store.reader import Recipe, Store
 
 cfg = StoreConfig(data_root=Path(sys.argv[1]), catalog=sys.argv[2])
 as_of = datetime(2026, 11, 1, 12, tzinfo=UTC)

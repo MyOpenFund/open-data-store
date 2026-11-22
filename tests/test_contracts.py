@@ -3,10 +3,10 @@ import dataclasses
 import pyarrow as pa
 import pytest
 
-from myopendata.contracts.base import Column
-from myopendata.contracts.registry import discover_contracts
-from myopendata.contracts.rules import ContractError, validate_contract
-from myopendata.contracts.standard import (
+from open_data_store.contracts.base import Column
+from open_data_store.contracts.registry import discover_contracts
+from open_data_store.contracts.rules import ContractError, validate_contract
+from open_data_store.contracts.standard import (
     ENTITY_OBSERVATIONS,
     FILING_STATEMENTS,
     FILINGS,
@@ -175,11 +175,11 @@ def test_nested_columns_are_rejected():
 
 
 def test_resolution_policy_comes_from_env(monkeypatch, tmp_path):
-    from myopendata.config import StoreConfig
+    from open_data_store.config import StoreConfig
 
-    monkeypatch.setenv("MYOPENDATA_DATA_ROOT", str(tmp_path))
-    monkeypatch.setenv("MYOPENDATA_CATALOG", str(tmp_path / "m.ducklake"))
-    monkeypatch.setenv("MYOPENDATA_RESOLVING_SCHEMES", "cik, lei")
+    monkeypatch.setenv("OPEN_DATA_STORE_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("OPEN_DATA_STORE_CATALOG", str(tmp_path / "m.ducklake"))
+    monkeypatch.setenv("OPEN_DATA_STORE_RESOLVING_SCHEMES", "cik, lei")
     cfg = StoreConfig.from_env()
     assert cfg.resolving_schemes == ("cik", "lei")
     assert cfg.single_valued_schemes == ("cik", "lei", "cb_code")
@@ -188,23 +188,23 @@ def test_resolution_policy_comes_from_env(monkeypatch, tmp_path):
 @pytest.mark.parametrize(
     "var, value",
     [
-        ("MYOPENDATA_RESOLVING_SCHEMES", "CIK"),
-        ("MYOPENDATA_RESOLVING_SCHEMES", ","),
-        ("MYOPENDATA_DATA_INLINING_ROW_LIMIT", "x"),
+        ("OPEN_DATA_STORE_RESOLVING_SCHEMES", "CIK"),
+        ("OPEN_DATA_STORE_RESOLVING_SCHEMES", ","),
+        ("OPEN_DATA_STORE_DATA_INLINING_ROW_LIMIT", "x"),
     ],
 )
 def test_bad_env_values_are_clear_errors(monkeypatch, tmp_path, var, value):
-    from myopendata.config import StoreConfig
+    from open_data_store.config import StoreConfig
 
-    monkeypatch.setenv("MYOPENDATA_DATA_ROOT", str(tmp_path))
-    monkeypatch.setenv("MYOPENDATA_CATALOG", str(tmp_path / "m.ducklake"))
+    monkeypatch.setenv("OPEN_DATA_STORE_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("OPEN_DATA_STORE_CATALOG", str(tmp_path / "m.ducklake"))
     monkeypatch.setenv(var, value)
     with pytest.raises(RuntimeError, match=var):
         StoreConfig.from_env()
 
 
 def test_fundamentals_v3_shape():
-    from myopendata.contracts.standard.fundamentals import FREQUENCIES
+    from open_data_store.contracts.standard.fundamentals import FREQUENCIES
 
     assert FUNDAMENTALS.version == "3.1.0" and FUNDAMENTALS.table_name == "fundamentals_v3"
     assert FREQUENCIES == ("annual", "semiannual", "quarterly", "instant", "ytd9")
@@ -225,15 +225,15 @@ def test_fundamentals_v3_shape():
 
 
 def test_registry_holds_no_older_fundamentals():
-    from myopendata.contracts.registry import discover_contracts
+    from open_data_store.contracts.registry import discover_contracts
 
     found = discover_contracts()
     assert ("fundamentals", 1) not in found and ("fundamentals", 2) not in found
 
 
 def test_filing_statements_shape():
-    from myopendata.contracts.registry import discover_contracts
-    from myopendata.contracts.standard import FILING_STATEMENTS
+    from open_data_store.contracts.registry import discover_contracts
+    from open_data_store.contracts.standard import FILING_STATEMENTS
 
     assert ("filing_statements", 1) in discover_contracts()
     assert FILING_STATEMENTS.version == "1.0.0"
@@ -253,8 +253,8 @@ def test_filing_statements_shape():
 def test_filing_statements_refuses_another_statement_class():
     from conftest import NOW, statement_row, table
 
-    from myopendata.contracts.rules import BatchInvalid, conform
-    from myopendata.contracts.standard import FILING_STATEMENTS
+    from open_data_store.contracts.rules import BatchInvalid, conform
+    from open_data_store.contracts.standard import FILING_STATEMENTS
 
     with pytest.raises(BatchInvalid):
         conform(
@@ -284,7 +284,7 @@ def test_filings_shape():
 def test_filings_accept_a_filing_without_report_date():
     from conftest import NOW, filing_row, table
 
-    from myopendata.contracts.rules import conform
+    from open_data_store.contracts.rules import conform
 
     t = conform(FILINGS, table(FILINGS, [filing_row(form="40-F", report_date=None)]), now=NOW)
     assert t.num_rows == 1
@@ -293,7 +293,7 @@ def test_filings_accept_a_filing_without_report_date():
 def test_filings_refuse_a_missing_form():
     from conftest import NOW, filing_row, table
 
-    from myopendata.contracts.rules import BatchInvalid, conform
+    from open_data_store.contracts.rules import BatchInvalid, conform
 
     with pytest.raises(BatchInvalid):
         conform(FILINGS, table(FILINGS, [filing_row(form=None)]), now=NOW)

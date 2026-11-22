@@ -5,9 +5,9 @@ import pytest
 from conftest import NOW, fund_row, obs_rows, ts
 from test_publisher import land
 
-from myopendata.contracts.standard import ENTITY_OBSERVATIONS, FUNDAMENTALS
-from myopendata.publisher import publish_pending
-from myopendata.reader import Store
+from open_data_store.contracts.standard import ENTITY_OBSERVATIONS, FUNDAMENTALS
+from open_data_store.publisher import publish_pending
+from open_data_store.reader import Store
 
 MSFT, AAPL = "0000789019", "0000320193"
 CASH = "us-gaap:CashAndCashEquivalentsAtCarryingValue"
