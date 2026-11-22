@@ -6,9 +6,9 @@ import pyarrow as pa
 import pytest
 from conftest import NOW, fund_row, table, ts
 
-from myopendata.contracts.rules import BatchInvalid
-from myopendata.contracts.standard import FUNDAMENTALS
-from myopendata.writer import write_batch
+from open_data_store.contracts.rules import BatchInvalid
+from open_data_store.contracts.standard import FUNDAMENTALS
+from open_data_store.writer import write_batch
 
 
 def _write(tmp_path, rows, **kw):
@@ -132,8 +132,8 @@ def test_empty_batch_rejected(tmp_path):
 
 
 def test_non_race_rename_error_is_raised(tmp_path):
-    from myopendata.contracts.rules import conform
-    from myopendata.writer.batch import batch_id_for, content_hash
+    from open_data_store.contracts.rules import conform
+    from open_data_store.writer.batch import batch_id_for, content_hash
 
     t = conform(FUNDAMENTALS, table(FUNDAMENTALS, [fund_row()]), now=NOW)
     bid = batch_id_for(FUNDAMENTALS, content_hash(t))
@@ -145,7 +145,7 @@ def test_non_race_rename_error_is_raised(tmp_path):
 
 
 def test_failed_write_leaves_no_tmp_dir(tmp_path, monkeypatch):
-    import myopendata.writer.batch as b
+    import open_data_store.writer.batch as b
 
     def boom(*a, **k):
         raise OSError("disk full")
@@ -159,7 +159,7 @@ def test_failed_write_leaves_no_tmp_dir(tmp_path, monkeypatch):
 def test_manifest_hashes_match_the_file(tmp_path):
     import pyarrow.parquet as pq
 
-    from myopendata.writer.batch import content_hash, file_sha256
+    from open_data_store.writer.batch import content_hash, file_sha256
 
     ref = _write(
         tmp_path, [fund_row(), fund_row(original_tag="us-gaap:Revenue")], source_inputs=["b", "a"]
@@ -171,8 +171,8 @@ def test_manifest_hashes_match_the_file(tmp_path):
 
 
 def test_hash_ignores_chunking_column_order_and_metadata():
-    from myopendata.contracts.rules import conform
-    from myopendata.writer.batch import content_hash
+    from open_data_store.contracts.rules import conform
+    from open_data_store.writer.batch import content_hash
 
     t = conform(
         FUNDAMENTALS, table(FUNDAMENTALS, [fund_row(), fund_row(original_tag="us-gaap:R")]), now=NOW

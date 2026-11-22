@@ -9,13 +9,13 @@ import pyarrow.parquet as pq
 import pytest
 from conftest import NOW, fund_row, obs_rows, table, ts
 
-from myopendata.contracts.base import Column, Contract
-from myopendata.contracts.standard import ENTITY_OBSERVATIONS, FUNDAMENTALS
-from myopendata.contracts.standard._common import BITEMPORAL_COLUMNS
-from myopendata.lake import connect
-from myopendata.publisher import ApprovalRefused, approve_contract, publish_pending
-from myopendata.writer import write_batch
-from myopendata.writer.batch import file_sha256
+from open_data_store.contracts.base import Column, Contract
+from open_data_store.contracts.standard import ENTITY_OBSERVATIONS, FUNDAMENTALS
+from open_data_store.contracts.standard._common import BITEMPORAL_COLUMNS
+from open_data_store.lake import connect
+from open_data_store.publisher import ApprovalRefused, approve_contract, publish_pending
+from open_data_store.writer import write_batch
+from open_data_store.writer.batch import file_sha256
 
 
 def land(cfg, contract, rows, run_id="r1"):
@@ -260,7 +260,7 @@ def test_ticker_only_subject_is_not_resolvable(approved):
 
 
 def test_resolution_does_not_depend_on_row_order():
-    from myopendata.publisher.entities import DEFAULT_RESOLVING_SCHEMES, resolve_observations
+    from open_data_store.publisher.entities import DEFAULT_RESOLVING_SCHEMES, resolve_observations
 
     rows = [
         obs_rows(
@@ -517,7 +517,7 @@ def test_backfilled_history_lands_in_the_right_interval(approved):
 
 
 def test_fatal_when_catalogue_unreachable(tmp_path):
-    from myopendata.config import StoreConfig
+    from open_data_store.config import StoreConfig
 
     bad = StoreConfig(data_root=tmp_path, catalog="postgres:host=/nonexistent dbname=x")
     rep = publish_pending(bad, now=NOW)
@@ -533,7 +533,7 @@ def test_approve_records_fingerprint(cfg):
 
 
 def test_two_subjects_cannot_attach_two_leis_to_one_entity():
-    from myopendata.publisher.entities import (
+    from open_data_store.publisher.entities import (
         DEFAULT_RESOLVING_SCHEMES,
         EntityConflict,
         resolve_observations,
@@ -553,7 +553,7 @@ def test_two_subjects_cannot_attach_two_leis_to_one_entity():
 def test_conflicting_approval_is_refused_and_reapproval_is_a_noop(approved):
     import pytest
 
-    from myopendata.publisher import ApprovalRefused
+    from open_data_store.publisher import ApprovalRefused
 
     assert approve_contract(approved, FUNDAMENTALS, "x") == "already_approved"
     floaty = dataclasses.replace(
@@ -573,7 +573,7 @@ def test_conflicting_approval_is_refused_and_reapproval_is_a_noop(approved):
 def test_infrastructure_error_on_one_batch_is_fatal_but_others_publish(approved, monkeypatch):
     import duckdb
 
-    from myopendata.publisher import publish as pub
+    from open_data_store.publisher import publish as pub
 
     land(approved, ENTITY_OBSERVATIONS, [obs_rows()])
     land(approved, FUNDAMENTALS, [fund_row()])
@@ -592,7 +592,7 @@ def test_infrastructure_error_on_one_batch_is_fatal_but_others_publish(approved,
 
 
 def test_move_never_overwrites(tmp_path):
-    from myopendata.publisher.publish import _move
+    from open_data_store.publisher.publish import _move
 
     for content in ("first", "second"):
         src = tmp_path / "src"
@@ -994,7 +994,7 @@ def _v300():
 
 
 def test_fundamentals_3_1_0_publishes_ytd9_over_a_published_3_0_0(cfg):
-    from myopendata.reader import Store
+    from open_data_store.reader import Store
 
     old = _v300()
     # anchored to production: main's 3.0.0 fingerprint
@@ -1045,8 +1045,8 @@ def test_first_error_of_a_failed_publish_is_the_one_reported(catalog, request, m
     publishes the failed one."""
     from conftest import filing_row
 
-    from myopendata.contracts.standard import FILINGS
-    from myopendata.publisher import publish as pub
+    from open_data_store.contracts.standard import FILINGS
+    from open_data_store.publisher import publish as pub
 
     cfg = request.getfixturevalue(catalog)
     for contract in (ENTITY_OBSERVATIONS, FUNDAMENTALS, FILINGS):
@@ -1095,8 +1095,8 @@ def test_facts_behind_a_failed_identity_batch_are_deferred_not_quarantined(
     quarantined as unknown_entity, so the rerun publishes all of them without a manual move."""
     from conftest import filing_row
 
-    from myopendata.contracts.standard import FILINGS
-    from myopendata.publisher import publish as pub
+    from open_data_store.contracts.standard import FILINGS
+    from open_data_store.publisher import publish as pub
 
     cfg = request.getfixturevalue(catalog)
     for contract in (ENTITY_OBSERVATIONS, FUNDAMENTALS, FILINGS):
@@ -1131,8 +1131,8 @@ def test_identity_failure_defers_only_unresolved_facts(catalog, request, monkeyp
     healthy run publishes the issuer and its facts and quarantines the orphan (unknown_entity)."""
     from conftest import filing_row
 
-    from myopendata.contracts.standard import FILINGS
-    from myopendata.publisher import publish as pub
+    from open_data_store.contracts.standard import FILINGS
+    from open_data_store.publisher import publish as pub
 
     cfg = request.getfixturevalue(catalog)
     for contract in (ENTITY_OBSERVATIONS, FUNDAMENTALS, FILINGS):
@@ -1169,8 +1169,8 @@ def test_a_failed_fact_batch_does_not_defer_orphans(catalog, request, monkeypatc
     batch of an unknown issuer is still quarantined as unknown_entity."""
     from conftest import filing_row
 
-    from myopendata.contracts.standard import FILINGS
-    from myopendata.publisher import publish as pub
+    from open_data_store.contracts.standard import FILINGS
+    from open_data_store.publisher import publish as pub
 
     cfg = request.getfixturevalue(catalog)
     for contract in (ENTITY_OBSERVATIONS, FUNDAMENTALS, FILINGS):
@@ -1205,8 +1205,8 @@ def test_an_interrupt_with_a_failing_rollback_stays_an_interrupt(catalog, reques
     import duckdb
     from conftest import filing_row
 
-    from myopendata.contracts.standard import FILINGS
-    from myopendata.publisher import publish as pub
+    from open_data_store.contracts.standard import FILINGS
+    from open_data_store.publisher import publish as pub
 
     cfg = request.getfixturevalue(catalog)
     for contract in (ENTITY_OBSERVATIONS, FUNDAMENTALS, FILINGS):
@@ -1258,8 +1258,8 @@ def test_a_commit_conflict_on_the_identity_batch_is_a_batch_error_and_defers_fac
     (ResourceInUseException), so it cannot reach a commit conflict."""
     from conftest import filing_row
 
-    from myopendata.contracts.standard import FILINGS
-    from myopendata.publisher import publish as pub
+    from open_data_store.contracts.standard import FILINGS
+    from open_data_store.publisher import publish as pub
 
     cfg = pg_cfg
     for contract in (ENTITY_OBSERVATIONS, FUNDAMENTALS, FILINGS):
@@ -1319,8 +1319,8 @@ def test_a_failed_rollback_is_fatal_and_stops_the_run(catalog, request, monkeypa
     import duckdb
     from conftest import filing_row
 
-    from myopendata.contracts.standard import FILINGS
-    from myopendata.publisher import publish as pub
+    from open_data_store.contracts.standard import FILINGS
+    from open_data_store.publisher import publish as pub
 
     cfg = request.getfixturevalue(catalog)
     for contract in (ENTITY_OBSERVATIONS, FUNDAMENTALS, FILINGS):
@@ -1363,7 +1363,7 @@ def test_a_failed_rollback_is_fatal_and_stops_the_run(catalog, request, monkeypa
 def test_unregister_keeps_the_original_error_but_raises_on_its_own():
     import duckdb
 
-    from myopendata.lake import registered
+    from open_data_store.lake import registered
 
     con = duckdb.connect()
     con.execute("BEGIN")
@@ -1382,7 +1382,7 @@ def test_unregister_keeps_the_original_error_but_raises_on_its_own():
 def test_registered_unregisters_after_a_non_duckdb_error_and_an_early_return():
     import duckdb
 
-    from myopendata.lake import registered
+    from open_data_store.lake import registered
 
     con = duckdb.connect()
     with pytest.raises(KeyError):

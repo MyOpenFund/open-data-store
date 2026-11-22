@@ -1,4 +1,4 @@
--- my-open-data catalogue: two roles and one database, on the stack's own Postgres (service init)
+-- open-data-store catalogue: two roles and one database, on the stack's own Postgres (service init)
 -- or on any Postgres. Run as a superuser; reruns are no-ops:
 --   psql -U postgres -d postgres -v db=lake_catalog \
 --        -v publisher_password=<hex> -v reader_password=<hex> -f roles.sql

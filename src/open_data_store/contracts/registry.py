@@ -1,13 +1,13 @@
-"""Discover contracts through the "myopendata.contracts" entry-point group (spec §6.1)."""
+"""Discover contracts through the "open_data_store.contracts" entry-point group (spec §6.1)."""
 
 from __future__ import annotations
 
 from importlib.metadata import entry_points
 
-from myopendata.contracts.base import Contract, ContractError
-from myopendata.contracts.rules import validate_contract
+from open_data_store.contracts.base import Contract, ContractError
+from open_data_store.contracts.rules import validate_contract
 
-GROUP = "myopendata.contracts"
+GROUP = "open_data_store.contracts"
 
 
 def discover_contracts(extra: list[Contract] | None = None) -> dict[tuple[str, int], Contract]:

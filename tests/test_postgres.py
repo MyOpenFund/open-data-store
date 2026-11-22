@@ -4,9 +4,9 @@ import pytest
 from conftest import NOW, filing_row, fund_row, obs_rows
 from test_publisher import land
 
-from myopendata.contracts.standard import ENTITY_OBSERVATIONS, FILINGS, FUNDAMENTALS
-from myopendata.publisher import approve_contract, publish_pending
-from myopendata.reader import Store
+from open_data_store.contracts.standard import ENTITY_OBSERVATIONS, FILINGS, FUNDAMENTALS
+from open_data_store.publisher import approve_contract, publish_pending
+from open_data_store.reader import Store
 
 pytestmark = pytest.mark.postgres
 

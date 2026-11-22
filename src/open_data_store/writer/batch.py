@@ -20,8 +20,8 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from myopendata.contracts.base import Contract
-from myopendata.contracts.rules import conform, validate_contract
+from open_data_store.contracts.base import Contract
+from open_data_store.contracts.rules import conform, validate_contract
 
 MANIFEST = "batch.json"
 DATA = "data.parquet"

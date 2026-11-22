@@ -3,13 +3,13 @@ import json
 from conftest import NOW, obs_rows
 from test_publisher import land
 
-from myopendata.cli import main
-from myopendata.contracts.standard import ENTITY_OBSERVATIONS
+from open_data_store.cli import main
+from open_data_store.contracts.standard import ENTITY_OBSERVATIONS
 
 
 def _env(monkeypatch, cfg):
-    monkeypatch.setenv("MYOPENDATA_DATA_ROOT", str(cfg.data_root))
-    monkeypatch.setenv("MYOPENDATA_CATALOG", cfg.catalog)
+    monkeypatch.setenv("OPEN_DATA_STORE_DATA_ROOT", str(cfg.data_root))
+    monkeypatch.setenv("OPEN_DATA_STORE_CATALOG", cfg.catalog)
 
 
 def test_contracts_list(capsys):
@@ -37,10 +37,10 @@ def test_approve_unknown_contract(cfg, monkeypatch):
 
 
 def test_missing_env_is_a_clean_error(monkeypatch, capsys):
-    monkeypatch.delenv("MYOPENDATA_DATA_ROOT", raising=False)
-    monkeypatch.delenv("MYOPENDATA_CATALOG", raising=False)
+    monkeypatch.delenv("OPEN_DATA_STORE_DATA_ROOT", raising=False)
+    monkeypatch.delenv("OPEN_DATA_STORE_CATALOG", raising=False)
     assert main(["publish"]) == 1
-    assert "MYOPENDATA_DATA_ROOT" in capsys.readouterr().err
+    assert "OPEN_DATA_STORE_DATA_ROOT" in capsys.readouterr().err
 
 
 def test_reapproval_is_reported_as_noop(cfg, monkeypatch, capsys):

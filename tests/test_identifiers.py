@@ -10,14 +10,14 @@ import pytest
 from conftest import NOW, fund_row, obs_rows, table, ts
 from test_publisher import land, q
 
-from myopendata.contracts.base import Column, Contract, ContractError
-from myopendata.contracts.rules import NAME_RE, conform, validate_contract
-from myopendata.contracts.standard import ENTITY_OBSERVATIONS, FUNDAMENTALS
-from myopendata.contracts.standard._common import BITEMPORAL_COLUMNS
-from myopendata.lake import connect, qualified, quote_ident
-from myopendata.publisher import approve_contract, publish_pending
-from myopendata.reader import Recipe, Store
-from myopendata.writer import write_batch
+from open_data_store.contracts.base import Column, Contract, ContractError
+from open_data_store.contracts.rules import NAME_RE, conform, validate_contract
+from open_data_store.contracts.standard import ENTITY_OBSERVATIONS, FUNDAMENTALS
+from open_data_store.contracts.standard._common import BITEMPORAL_COLUMNS
+from open_data_store.lake import connect, qualified, quote_ident
+from open_data_store.publisher import approve_contract, publish_pending
+from open_data_store.reader import Recipe, Store
+from open_data_store.writer import write_batch
 
 KEYWORDS = ("order", "group", "select", "from", "window", "pivot", "default", "union")
 

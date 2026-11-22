@@ -1,7 +1,7 @@
 import pyarrow as pa
 
-from myopendata.contracts.base import Column
-from myopendata.contracts.rules import ID_SCHEMES, KNOWN_AT_KINDS
+from open_data_store.contracts.base import Column
+from open_data_store.contracts.rules import ID_SCHEMES, KNOWN_AT_KINDS
 
 __all__ = ["BITEMPORAL_COLUMNS", "ID_SCHEMES"]
 

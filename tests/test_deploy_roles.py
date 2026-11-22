@@ -15,10 +15,10 @@ import pytest
 from conftest import NOW, fund_row, obs_rows
 from test_publisher import land
 
-from myopendata.config import StoreConfig
-from myopendata.contracts.standard import ENTITY_OBSERVATIONS, FUNDAMENTALS
-from myopendata.publisher import approve_contract, publish_pending
-from myopendata.reader import Store
+from open_data_store.config import StoreConfig
+from open_data_store.contracts.standard import ENTITY_OBSERVATIONS, FUNDAMENTALS
+from open_data_store.publisher import approve_contract, publish_pending
+from open_data_store.reader import Store
 
 DEPLOY = Path(__file__).parents[1] / "deploy" / "nas"
 ROLES = DEPLOY / "roles.sql"
@@ -56,9 +56,9 @@ def _psql(conninfo: str, *args: str) -> subprocess.CompletedProcess:
 
 @pytest.fixture
 def admin():
-    dsn = os.environ.get("MYOPENDATA_TEST_PG")
+    dsn = os.environ.get("OPEN_DATA_STORE_TEST_PG")
     if not dsn:
-        pytest.skip("MYOPENDATA_TEST_PG not set")
+        pytest.skip("OPEN_DATA_STORE_TEST_PG not set")
     if shutil.which("psql") is None:
         if os.environ.get("CI"):
             pytest.fail("psql not installed, but CI must run the Postgres tests")

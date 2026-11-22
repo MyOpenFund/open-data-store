@@ -1,10 +1,10 @@
-# my-open-data store as one self-contained stack (Docker Compose / Dockge). Every value comes from
+# open-data-store as one self-contained stack (Docker Compose / Dockge). Every value comes from
 # .env (see .env.example); no secret in this file.
-#   catalog  Postgres for the DuckLake catalogue; always on, port MYOPENDATA_PG_BIND only
+#   catalog  Postgres for the DuckLake catalogue; always on, port OPEN_DATA_STORE_PG_BIND only
 #   init     creates the roles and the database (idempotent; same SQL as roles.sql)
-#   install  pip my-open-data at MYOPENDATA_REF into a volume
+#   install  pip open-data-store at OPEN_DATA_STORE_REF into a volume
 #   backup   pg_dump of the catalogue into <host dir>/backups/ (publish never runs without it)
-#   publish  optional contract approvals (MYOPENDATA_APPROVE), then `myopendata publish`
+#   publish  optional contract approvals (OPEN_DATA_STORE_APPROVE), then `open-data-store publish`
 # Starting the stack runs init, install, backup and publish once each; start it again to publish
 # again.
 services:
@@ -12,14 +12,14 @@ services:
     image: postgres:16
     restart: unless-stopped
     environment:
-      POSTGRES_PASSWORD: ${MYOPENDATA_ADMIN_PASSWORD:?set}
+      POSTGRES_PASSWORD: ${OPEN_DATA_STORE_ADMIN_PASSWORD:?set}
     # A Docker volume, not a host directory: Postgres must chmod its data directory to 0700, which
     # datasets with NFSv4 ACLs (SMB shares) refuse. Deleting the volume deletes the catalogue; it is
     # dumped to backups/ at each start (see README).
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - ${MYOPENDATA_PG_BIND:?set}:5432
+      - ${OPEN_DATA_STORE_PG_BIND:?set}:5432
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -h 127.0.0.1"]
       interval: 5s
@@ -35,10 +35,10 @@ services:
     environment:
       PGHOST: catalog
       PGUSER: postgres
-      PGPASSWORD: ${MYOPENDATA_ADMIN_PASSWORD:?set}
-      DB: ${MYOPENDATA_CATALOG_DB:?set}
-      PUB: ${MYOPENDATA_PUBLISHER_PASSWORD:?set}
-      READ: ${MYOPENDATA_READER_PASSWORD:?set}
+      PGPASSWORD: ${OPEN_DATA_STORE_ADMIN_PASSWORD:?set}
+      DB: ${OPEN_DATA_STORE_CATALOG_DB:?set}
+      PUB: ${OPEN_DATA_STORE_PUBLISHER_PASSWORD:?set}
+      READ: ${OPEN_DATA_STORE_READER_PASSWORD:?set}
     command:
       - sh
       - -c
@@ -79,8 +79,8 @@ services:
         apt-get install -y -qq --no-install-recommends git &&
         python -m venv --clear /opt/venv &&
         /opt/venv/bin/pip install -q --no-cache-dir
-        "my-open-data[publisher] @ git+https://github.com/MyOpenFund/my-open-data@${MYOPENDATA_REF:?set}" &&
-        /opt/venv/bin/myopendata contracts list
+        "open-data-store[publisher] @ git+https://github.com/MyOpenFund/open-data-store@${OPEN_DATA_STORE_REF:?set}" &&
+        /opt/venv/bin/open-data-store contracts list
 
   backup:
     image: postgres:16
@@ -88,14 +88,14 @@ services:
     depends_on:
       init:
         condition: service_completed_successfully
-    user: ${MYOPENDATA_UID_GID:?set}
+    user: ${OPEN_DATA_STORE_UID_GID:?set}
     environment:
       PGHOST: catalog
       PGUSER: lake_publisher
-      PGPASSWORD: ${MYOPENDATA_PUBLISHER_PASSWORD:?set}
-      PGDATABASE: ${MYOPENDATA_CATALOG_DB:?set}
+      PGPASSWORD: ${OPEN_DATA_STORE_PUBLISHER_PASSWORD:?set}
+      PGDATABASE: ${OPEN_DATA_STORE_CATALOG_DB:?set}
     volumes:
-      - ${MYOPENDATA_HOST_DIR:?set}:/data
+      - ${OPEN_DATA_STORE_HOST_DIR:?set}:/data
     command:
       - sh
       - -c
@@ -113,7 +113,7 @@ services:
         condition: service_completed_successfully
       backup:
         condition: service_completed_successfully
-    user: ${MYOPENDATA_UID_GID:?set}
+    user: ${OPEN_DATA_STORE_UID_GID:?set}
     read_only: true
     working_dir: /tmp
     # Docker mounts tmpfs noexec by default; DuckDB loads the ducklake and postgres extensions from
@@ -126,25 +126,25 @@ services:
       - no-new-privileges:true
     volumes:
       - venv:/opt/venv:ro
-      - ${MYOPENDATA_HOST_DIR:?set}:/data
+      - ${OPEN_DATA_STORE_HOST_DIR:?set}:/data
     environment:
       HOME: /tmp
       PYTHONUNBUFFERED: "1"
-      MYOPENDATA_DATA_ROOT: /data
-      MYOPENDATA_CATALOG: "postgres:dbname=${MYOPENDATA_CATALOG_DB:?set} host=catalog user=lake_publisher password=${MYOPENDATA_PUBLISHER_PASSWORD:?set}"
-      MYOPENDATA_APPROVE: ${MYOPENDATA_APPROVE:-}
-      MYOPENDATA_APPROVED_BY: ${MYOPENDATA_APPROVED_BY:-}
+      OPEN_DATA_STORE_DATA_ROOT: /data
+      OPEN_DATA_STORE_CATALOG: "postgres:dbname=${OPEN_DATA_STORE_CATALOG_DB:?set} host=catalog user=lake_publisher password=${OPEN_DATA_STORE_PUBLISHER_PASSWORD:?set}"
+      OPEN_DATA_STORE_APPROVE: ${OPEN_DATA_STORE_APPROVE:-}
+      OPEN_DATA_STORE_APPROVED_BY: ${OPEN_DATA_STORE_APPROVED_BY:-}
     command:
       - sh
       - -c
       - >-
-        if [ -n "$$MYOPENDATA_APPROVE" ] && [ -z "$$MYOPENDATA_APPROVED_BY" ]; then
-        echo "MYOPENDATA_APPROVE needs MYOPENDATA_APPROVED_BY" >&2; exit 2; fi;
-        for c in $$MYOPENDATA_APPROVE; do
-        /opt/venv/bin/myopendata contracts approve "$${c%%:*}" "$${c##*:}"
-        --by "$$MYOPENDATA_APPROVED_BY" || exit 1;
+        if [ -n "$$OPEN_DATA_STORE_APPROVE" ] && [ -z "$$OPEN_DATA_STORE_APPROVED_BY" ]; then
+        echo "OPEN_DATA_STORE_APPROVE needs OPEN_DATA_STORE_APPROVED_BY" >&2; exit 2; fi;
+        for c in $$OPEN_DATA_STORE_APPROVE; do
+        /opt/venv/bin/open-data-store contracts approve "$${c%%:*}" "$${c##*:}"
+        --by "$$OPEN_DATA_STORE_APPROVED_BY" || exit 1;
         done;
-        exec /opt/venv/bin/myopendata publish
+        exec /opt/venv/bin/open-data-store publish
 
 volumes:
   venv:

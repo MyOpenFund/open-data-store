@@ -6,12 +6,12 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-ENV_DATA_ROOT = "MYOPENDATA_DATA_ROOT"
-ENV_CATALOG = "MYOPENDATA_CATALOG"
-ENV_INLINING = "MYOPENDATA_DATA_INLINING_ROW_LIMIT"
-ENV_FUTURE_TOLERANCE = "MYOPENDATA_KNOWN_AT_FUTURE_TOLERANCE_S"
-ENV_RESOLVING = "MYOPENDATA_RESOLVING_SCHEMES"
-ENV_SINGLE_VALUED = "MYOPENDATA_SINGLE_VALUED_SCHEMES"
+ENV_DATA_ROOT = "OPEN_DATA_STORE_DATA_ROOT"
+ENV_CATALOG = "OPEN_DATA_STORE_CATALOG"
+ENV_INLINING = "OPEN_DATA_STORE_DATA_INLINING_ROW_LIMIT"
+ENV_FUTURE_TOLERANCE = "OPEN_DATA_STORE_KNOWN_AT_FUTURE_TOLERANCE_S"
+ENV_RESOLVING = "OPEN_DATA_STORE_RESOLVING_SCHEMES"
+ENV_SINGLE_VALUED = "OPEN_DATA_STORE_SINGLE_VALUED_SCHEMES"
 
 # Schemes trusted to merge identifiers into one entity (decision D3). Tickers are reused over
 # time, so they are not in the default and never merge entities.
@@ -76,7 +76,7 @@ def _int(var: str, default: int) -> int:
 
 
 def _schemes(var: str, default: tuple[str, ...]) -> tuple[str, ...]:
-    from myopendata.contracts.rules import ID_SCHEMES
+    from open_data_store.contracts.rules import ID_SCHEMES
 
     raw = os.environ.get(var, "").strip()
     if not raw:

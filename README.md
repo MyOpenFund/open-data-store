@@ -1,4 +1,4 @@
-# my-open-data
+# open-data-store
 
 Bitemporal open-data store for MyOpenFund: dataset **contracts**, a light **writer** for producers,
 a **publisher** (the only writer to the lake) and a **reader** for analyses, the MCP and strategies.
@@ -7,30 +7,33 @@ Facts are DuckLake tables (Parquet + a Postgres catalogue), read through DuckDB.
 
 > This library is a tool. It manages nobody's money and gives no investment advice.
 
+Renamed on 2026-11-22 (package, import, command and environment variables): see
+[docs/MIGRATION.md](docs/MIGRATION.md).
+
 ## Install
 
 ```
-pip install "my-open-data[writer]"     # producers: pyarrow only
-pip install "my-open-data[publisher]"  # store operator: DuckDB + DuckLake
-pip install "my-open-data[reader]"     # analyses, MCP, strategies
+pip install "open-data-store[writer]"     # producers: pyarrow only
+pip install "open-data-store[publisher]"  # store operator: DuckDB + DuckLake
+pip install "open-data-store[reader]"     # analyses, MCP, strategies
 ```
 
 ## Configuration
 
 | Variable | Meaning |
 |---|---|
-| `MYOPENDATA_DATA_ROOT` | Holds `landing/` (batches), `lake/` (Parquet), `reports/` |
-| `MYOPENDATA_CATALOG` | DuckLake catalogue: `postgres:dbname=... host=... user=...`, or a file path (tests, single user) |
-| `MYOPENDATA_DATA_INLINING_ROW_LIMIT` | Default `0`: every batch becomes a Parquet file |
-| `MYOPENDATA_KNOWN_AT_FUTURE_TOLERANCE_S` | Clock-skew tolerance, default `300` |
-| `MYOPENDATA_RESOLVING_SCHEMES` | Identifier schemes that may merge entities, default `cik,lei,isin,figi,cb_code,national_id` |
-| `MYOPENDATA_SINGLE_VALUED_SCHEMES` | Schemes an entity holds one value of, default `cik,lei,cb_code` |
+| `OPEN_DATA_STORE_DATA_ROOT` | Holds `landing/` (batches), `lake/` (Parquet), `reports/` |
+| `OPEN_DATA_STORE_CATALOG` | DuckLake catalogue: `postgres:dbname=... host=... user=...`, or a file path (tests, single user) |
+| `OPEN_DATA_STORE_DATA_INLINING_ROW_LIMIT` | Default `0`: every batch becomes a Parquet file |
+| `OPEN_DATA_STORE_KNOWN_AT_FUTURE_TOLERANCE_S` | Clock-skew tolerance, default `300` |
+| `OPEN_DATA_STORE_RESOLVING_SCHEMES` | Identifier schemes that may merge entities, default `cik,lei,isin,figi,cb_code,national_id` |
+| `OPEN_DATA_STORE_SINGLE_VALUED_SCHEMES` | Schemes an entity holds one value of, default `cik,lei,cb_code` |
 
 ## Reader interface (stable for v0.x)
 
 ```python
 from datetime import datetime, timezone
-from myopendata.reader import Recipe, Store, export
+from open_data_store.reader import Recipe, Store, export
 
 store = Store.open()                                   # config from env (or `with Store.open() as store:`)
 store.datasets()                                       # name, major, version, kind, licence, table
@@ -67,24 +70,24 @@ pruning.
 ## Producers
 
 ```python
-from myopendata.writer import write_batch
+from open_data_store.writer import write_batch
 ref = write_batch(contract, table, landing_root=data_root / "landing",
                   run_id=run_id, producer="company-corpus", source_inputs=[...])
 ```
 
 The writer validates the table against its contract and drops an atomic, idempotent batch in
 `landing/`. It never touches Postgres. A producer declares its own contracts through the
-`myopendata.contracts` entry-point group; standard contracts (`fundamentals`, `entity_observations`,
+`open_data_store.contracts` entry-point group; standard contracts (`fundamentals`, `entity_observations`,
 `filing_statements`, `filings`) ship with this library.
 
 ## Operator
 
 ```
-myopendata contracts list
-myopendata contracts approve fundamentals 3 --by <name>   # reviewed step; refuses conflicting definitions
-myopendata contracts approve filing_statements 1 --by <name>   # likewise, for a store that publishes it
-myopendata contracts approve filings 1 --by <name>             # likewise
-myopendata publish                                          # exit 0 ok · 1 fatal · 3 degraded
+open-data-store contracts list
+open-data-store contracts approve fundamentals 3 --by <name>        # reviewed step; refuses conflicting definitions
+open-data-store contracts approve filing_statements 1 --by <name>   # likewise, for a store that publishes it
+open-data-store contracts approve filings 1 --by <name>             # likewise
+open-data-store publish                                             # exit 0 ok · 1 fatal · 3 degraded
 ```
 
 `publish` audits every landed batch again (file checksum, contract, recomputed batch id),

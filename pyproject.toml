@@ -3,7 +3,7 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-name = "my-open-data"
+name = "open-data-store"
 version = "0.1.0"
 description = "Bitemporal open-data store for MyOpenFund: contracts, writer, publisher, reader."
 readme = "README.md"
@@ -30,21 +30,21 @@ reader = ["duckdb>=2.0,<3", "pytz>=2024.1", "openpyxl>=3.1"]
 dev = ["duckdb>=2.0,<3", "pytz>=2024.1", "openpyxl>=3.1", "pytest>=8", "ruff==0.17.3", "build>=1.2", "twine>=5"]
 
 [project.urls]
-Homepage = "https://github.com/MyOpenFund/my-open-data"
-Issues = "https://github.com/MyOpenFund/my-open-data/issues"
+Homepage = "https://github.com/MyOpenFund/open-data-store"
+Issues = "https://github.com/MyOpenFund/open-data-store/issues"
 
 [project.scripts]
-myopendata = "myopendata.cli:main"
+open-data-store = "open_data_store.cli:main"
 
-[project.entry-points."myopendata.contracts"]
-standard = "myopendata.contracts.standard:contracts"
+[project.entry-points."open_data_store.contracts"]
+standard = "open_data_store.contracts.standard:contracts"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/myopendata"]
+packages = ["src/open_data_store"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["postgres: needs MYOPENDATA_TEST_PG (a libpq DSN) for a Postgres DuckLake catalogue"]
+markers = ["postgres: needs OPEN_DATA_STORE_TEST_PG (a libpq DSN) for a Postgres DuckLake catalogue"]
 
 [tool.ruff]
 line-length = 100

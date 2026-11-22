@@ -7,7 +7,7 @@ from contextlib import contextmanager
 
 import duckdb
 
-from myopendata.config import StoreConfig
+from open_data_store.config import StoreConfig
 
 LAKE = "lake"
 REF_DDL = (
