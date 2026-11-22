@@ -58,3 +58,23 @@ jobs:
           docker run --rm --network host -e PGPASSWORD=ci-reader postgres:16 \
             psql -h 127.0.0.1 -p 5433 -U lake_reader -d lake_catalog -Atc "SELECT 1"
           $dc down -v
+      - name: a dump restores into a fresh stack, readable by lake_reader (stack migration path)
+        run: |
+          mkdir -p "$RUNNER_TEMP/rst/data"
+          sed "s#$RUNNER_TEMP/mod/data#$RUNNER_TEMP/rst/data#" "$RUNNER_TEMP/mod/.env" > "$RUNNER_TEMP/rst/.env"
+          dc="docker compose -f deploy/nas/compose.yaml --env-file $RUNNER_TEMP/rst/.env"
+          pub() { docker run --rm --network host -e PGPASSWORD=ci-publisher postgres:16 \
+            psql -h 127.0.0.1 -p 5433 -U lake_publisher -d lake_catalog -v ON_ERROR_STOP=1 -Atc "$1"; }
+          $dc up -d --wait catalog
+          $dc run --rm init
+          pub "CREATE TABLE ducklake_probe (n int); INSERT INTO ducklake_probe VALUES (1), (2), (3)"
+          $dc run --rm backup
+          dump="$(basename "$(ls "$RUNNER_TEMP"/rst/data/backups/lake_catalog-*.dump | tail -n 1)")"
+          $dc down -v
+          $dc up -d --wait catalog
+          $dc run --rm init
+          $dc run --rm backup sh -c "pg_restore -d \"\$PGDATABASE\" /data/backups/$dump"
+          test "$(docker run --rm --network host -e PGPASSWORD=ci-reader postgres:16 \
+            psql -h 127.0.0.1 -p 5433 -U lake_reader -d lake_catalog -Atc \
+            "SELECT count(*) FROM ducklake_probe")" = 3
+          $dc down -v
