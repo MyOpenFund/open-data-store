@@ -7,6 +7,9 @@ Facts are DuckLake tables (Parquet + a Postgres catalogue), read through DuckDB.
 
 > This library is a tool. It manages nobody's money and gives no investment advice.
 
+Renamed on 2026-11-22 (package, import, command and environment variables): see
+[docs/MIGRATION.md](docs/MIGRATION.md).
+
 ## Install
 
 ```
