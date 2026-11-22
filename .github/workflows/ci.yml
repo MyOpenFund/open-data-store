@@ -75,7 +75,7 @@ jobs:
           $dc down -v
           $dc up -d --wait catalog
           $dc run --rm init
-          $dc run --rm backup sh -c "pg_restore -d \"\$PGDATABASE\" /data/backups/$dump"
+          $dc run --rm backup sh -c "pg_restore --exit-on-error -d \"\$PGDATABASE\" /data/backups/$dump"
           test "$(docker run --rm --network host -e PGPASSWORD=ci-reader postgres:16 \
             psql -h 127.0.0.1 -p 5433 -U lake_reader -d lake_catalog -Atc \
             "SELECT count(*) FROM ducklake_probe")" = 3

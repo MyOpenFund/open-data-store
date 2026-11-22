@@ -62,7 +62,7 @@ library `DATA_ROOT`, `CATALOG`, `DATA_INLINING_ROW_LIMIT`, `KNOWN_AT_FUTURE_TOLE
       the same files (move the directory first if you change it).
    3. Before its first full start, restore (`deploy/nas/README.md`, restore):
       `docker compose up -d --wait catalog`, `docker compose run --rm init`, then
-      `docker compose run --rm backup sh -c 'pg_restore -d "$PGDATABASE" /data/backups/<dump>'`.
+      `docker compose run --rm backup sh -c 'pg_restore --exit-on-error -d "$PGDATABASE" /data/backups/<dump>'`.
    4. Start the new stack with an empty `landing/`: `contracts list` shows the same fingerprints,
       `publish` finds nothing to do, and a `lake_reader` read gives the same row counts as before.
    5. Only then delete the old stack, and its `pgdata` volume once you no longer need a way back.

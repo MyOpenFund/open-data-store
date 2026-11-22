@@ -51,7 +51,7 @@ To restore a dump, do it before the stack publishes into the new catalogue (othe
 ```sh
 docker compose up -d --wait catalog
 docker compose run --rm init
-docker compose run --rm backup sh -c 'pg_restore -d "$PGDATABASE" /data/backups/<file>.dump'
+docker compose run --rm backup sh -c 'pg_restore --exit-on-error -d "$PGDATABASE" /data/backups/<file>.dump'
 ```
 
 then republish the batches of `landing/_published/` newer than the dump (move them back into
