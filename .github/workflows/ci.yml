@@ -80,3 +80,28 @@ jobs:
             psql -h 127.0.0.1 -p 5433 -U lake_reader -d lake_catalog -Atc \
             "SELECT count(*) FROM ducklake_probe")" = 3
           $dc down -v
+
+  # Publication check on every PR and push: build, `twine check --strict`, and install the
+  # wheel (with its reader extra) in a fresh venv away from the checkout. release.yml repeats
+  # this and adds the tag check and the upload.
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Build and check the distribution
+        run: |
+          pip install build==1.6.1 twine==6.2.0
+          python -m build . --outdir dist
+          twine check --strict dist/*
+      - name: Smoke install in a fresh venv
+        run: |
+          python -m venv "$RUNNER_TEMP/smoke"
+          "$RUNNER_TEMP/smoke/bin/pip" install "$(ls "$PWD"/dist/*.whl)[reader]"
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/smoke/bin/python" -c "import open_data_store; print(open_data_store.__file__)"
+          "$RUNNER_TEMP/smoke/bin/open-data-store" --help
