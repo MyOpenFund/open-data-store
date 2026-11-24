@@ -79,7 +79,7 @@ services:
         apt-get install -y -qq --no-install-recommends git &&
         python -m venv --clear /opt/venv &&
         /opt/venv/bin/pip install -q --no-cache-dir
-        "open-data-store[publisher] @ git+https://github.com/MyOpenFund/open-data-store@${OPEN_DATA_STORE_REF:?set}" &&
+        "myopenfund-open-data-store[publisher] @ git+https://github.com/MyOpenFund/open-data-store@${OPEN_DATA_STORE_REF:?set}" &&
         /opt/venv/bin/open-data-store contracts list
 
   backup:

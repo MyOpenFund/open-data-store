@@ -188,9 +188,10 @@ def test_github_release_is_push_only_and_verifies_tag():
 
 
 def test_smoke_uses_cli_help_and_reader_extra():
-    text = RELEASE.read_text(encoding="utf-8") + CI.read_text(encoding="utf-8")
-    assert '/bin/open-data-store" --help' in text
-    assert "[reader]" in text
+    for path in (RELEASE, CI):
+        text = path.read_text(encoding="utf-8")
+        assert '/bin/open-data-store" --help' in text, path
+        assert "[reader]" in text, path
 
 
 def test_dependabot_covers_github_actions_only():
@@ -203,3 +204,12 @@ def test_dependabot_covers_github_actions_only():
 def test_ci_keeps_its_jobs_and_adds_package():
     jobs = _workflow(CI)["jobs"]
     assert {"test", "stack", "package"} <= set(jobs)
+    runs = " ".join(s.get("run", "") for s in jobs["package"]["steps"])
+    assert "build==1.6.1 twine==6.2.0" in runs
+    assert "twine check --strict" in runs
+
+
+def test_nas_compose_installs_the_published_distribution_name():
+    text = (ROOT / "deploy" / "nas" / "compose.yaml").read_text(encoding="utf-8")
+    assert '"myopenfund-open-data-store[publisher] @ git+' in text
+    assert '"open-data-store[' not in text

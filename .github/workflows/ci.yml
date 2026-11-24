@@ -28,7 +28,6 @@ jobs:
       - run: ruff check src tests deploy && ruff format --check src tests deploy
       - run: docker compose -f deploy/nas/compose.yaml --env-file deploy/nas/.env.example config -q
       - run: pytest -q -W error
-      - run: python -m build && twine check --strict dist/*
 
   stack:
     runs-on: ubuntu-latest

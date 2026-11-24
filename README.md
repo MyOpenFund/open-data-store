@@ -29,7 +29,7 @@ To try the latest `main` before a release (dependencies still come from PyPI):
 pip install "myopenfund-open-data-store[reader] @ git+https://github.com/MyOpenFund/open-data-store"
 ```
 
-### Working across repos
+**Working across repos**
 
 Clone the repos side by side and install this package editable over the PyPI version in the
 consumer's environment: `pip install -e ../open-data-store`. A consumer change that needs an
