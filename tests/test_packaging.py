@@ -205,7 +205,7 @@ def test_ci_keeps_its_jobs_and_adds_package():
     jobs = _workflow(CI)["jobs"]
     assert {"test", "stack", "package"} <= set(jobs)
     runs = " ".join(s.get("run", "") for s in jobs["package"]["steps"])
-    assert "build==1.6.1 twine==6.2.0" in runs
+    assert "build==1.6.1 twine==7.0.0" in runs
     assert "twine check --strict" in runs
 
 
