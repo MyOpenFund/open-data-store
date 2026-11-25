@@ -28,7 +28,8 @@ dependencies = ["pyarrow>=17"]
 writer = []
 publisher = ["duckdb>=2.0,<3", "pytz>=2024.1"]
 reader = ["duckdb>=2.0,<3", "pytz>=2024.1", "openpyxl>=3.1"]
-dev = ["duckdb>=2.0,<3", "pytz>=2024.1", "openpyxl>=3.1", "pytest>=8", "ruff==0.17.3", "build>=1.2", "twine>=5", "pyyaml>=6"]
+recipes = ["duckdb>=2.0,<3", "exchange_calendars==4.13.2"]
+dev = ["duckdb>=2.0,<3", "exchange_calendars==4.13.2", "pytz>=2024.1", "openpyxl>=3.1", "pytest>=8", "ruff==0.17.3", "build>=1.2", "twine>=5", "pyyaml>=6"]
 
 [project.urls]
 Homepage = "https://github.com/MyOpenFund/open-data-store"
