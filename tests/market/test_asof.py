@@ -163,3 +163,42 @@ def test_latest_keeps_input_row_order():
         ]
     )
     assert latest(t, ["k"]).column("v").to_pylist() == [1, 2, 4]
+
+
+def test_sessions_before_calendar_default_start():
+    s = sessions("XNYS", date(1999, 12, 27), date(2000, 1, 5))
+    assert date(2000, 1, 1).weekday() == 5
+    assert s.column("session_date").to_pylist() == [
+        date(1999, 12, 27),
+        date(1999, 12, 28),
+        date(1999, 12, 29),
+        date(1999, 12, 30),
+        date(1999, 12, 31),
+        date(2000, 1, 3),
+        date(2000, 1, 4),
+        date(2000, 1, 5),
+    ]
+
+
+def test_sessions_pre_2006_closure():
+    # NYSE closed 2001-09-11 through 2001-09-14.
+    s = sessions("XNYS", date(2001, 9, 10), date(2001, 9, 17))
+    assert s.column("session_date").to_pylist() == [date(2001, 9, 10), date(2001, 9, 17)]
+
+
+def test_sessions_winter_2000_close_utc():
+    s = sessions("XNYS", date(2000, 1, 3), date(2000, 1, 3))
+    assert s.column("close_utc").to_pylist() == [datetime(2000, 1, 3, 21, tzinfo=UTC)]
+
+
+def test_sessions_range_without_session_is_empty():
+    s = sessions("XNYS", date(2001, 9, 12), date(2001, 9, 14))
+    assert s.num_rows == 0
+    assert s.schema.field("session_date").type == pa.date32()
+
+
+def test_sessions_bad_range_raises():
+    with pytest.raises(ValueError, match="after"):
+        sessions("XNYS", date(2000, 1, 5), date(2000, 1, 3))
+    with pytest.raises(ValueError, match="supports"):
+        sessions("XNYS", date(1600, 1, 1), date(1600, 2, 1))

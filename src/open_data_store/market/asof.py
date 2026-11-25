@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Sequence
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import numpy as np
 import pyarrow as pa
@@ -94,17 +94,38 @@ def asof(table: pa.Table, natural_key: Sequence[str], as_of: datetime) -> pa.Tab
 
 
 def sessions(mic: str, start: date, end: date) -> pa.Table:
-    """Trading sessions of exchange ``mic`` in ``[start, end]`` inclusive, with the close in UTC."""
-    import exchange_calendars as xcals
+    """Trading sessions of exchange ``mic`` in ``[start, end]`` inclusive, with the close in UTC.
 
-    with warnings.catch_warnings():
-        # Upstream: exchange_calendars 4.13.2 calls Series.values on tz-aware data while building
-        # a calendar, which pandas 3.1 flags with Pandas4Warning.
-        warnings.filterwarnings(
-            "ignore", message="Series.values returning an ndarray", category=Warning
-        )
-        cal = xcals.get_calendar(mic)
-    days = cal.sessions_in_range(start.isoformat(), end.isoformat())
+    The calendar is built on the requested range, not the library's default window, so any
+    range the calendar library supports works, including history before its default start
+    (e.g. XNYS before 2006). A range with no session returns an empty table; ``start > end``
+    or a range outside the library's bounds raises ``ValueError``."""
+    import exchange_calendars as xcals
+    from exchange_calendars import errors as xerrors
+    from pandas.errors import OutOfBoundsDatetime
+
+    if start > end:
+        raise ValueError(f"start {start.isoformat()} is after end {end.isoformat()}")
+    try:
+        with warnings.catch_warnings():
+            # Upstream: exchange_calendars 4.13.2 calls Series.values on tz-aware data while
+            # building a calendar, which pandas 3.1 flags with Pandas4Warning.
+            warnings.filterwarnings(
+                "ignore", message="Series.values returning an ndarray", category=Warning
+            )
+            # The library needs start < end: build one day past end, filter back below.
+            cal = xcals.get_calendar(
+                mic, start=start.isoformat(), end=(end + timedelta(days=1)).isoformat()
+            )
+    except xerrors.NoSessionsError:
+        days = []
+    except (OutOfBoundsDatetime, xerrors.DateOutOfBounds) as exc:
+        raise ValueError(
+            f"sessions of {mic!r} over {start.isoformat()}..{end.isoformat()} are outside the "
+            f"range the exchange calendar library supports: {exc}"
+        ) from exc
+    else:
+        days = [d for d in cal.sessions if d.date() <= end]
     closes = [cal.session_close(d).to_pydatetime().astimezone(UTC) for d in days]
     return pa.table(
         {
