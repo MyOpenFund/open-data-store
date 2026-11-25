@@ -202,7 +202,11 @@ def conform(
     for col in contract.columns:
         arr = table[col.name]
         if col.allowed is not None:
-            ok = pc.is_in(arr, value_set=pa.array(col.allowed, type=pa.string()))
+            # a null passes: required columns are refused above, nullable ones may be empty
+            ok = pc.or_(
+                pc.is_in(arr, value_set=pa.array(col.allowed, type=pa.string())),
+                pc.is_null(arr),
+            )
             n = pc.sum(pc.cast(pc.invert(pc.fill_null(ok, True)), pa.int64())).as_py() or 0
             if n:
                 reasons.append(f"value_not_allowed:{col.name}:{n}")
