@@ -446,18 +446,171 @@ def test_resolve_actions_keeps_every_action_of_the_chosen_source():
     assert set(out.column("source_code").to_pylist()) == {"srca"}
 
 
-def test_split_without_ratio_raises():
+@pytest.mark.parametrize(
+    ("old", "new"), [(None, 2.0), (1.0, None), (0.0, 2.0), (1.0, -2.0), (float("nan"), 2.0)]
+)
+def test_split_without_valid_ratio_flagged_not_applied(old, new):
     prices = _prices((date(2020, 3, 2), 100.0), (date(2020, 3, 3), 50.0))
+    actions = _actions(
+        dict(valid_date=date(2020, 3, 3), action_type="split", ratio_old=old, ratio_new=new)
+    )
+    assert _rows(_tr(prices, actions))[-1] == (date(2020, 3, 3), 0.5, "action_invalid")
+
+
+@pytest.mark.parametrize("amount", [None, 0.0, -1.0, float("inf"), float("nan")])
+def test_cash_without_valid_amount_flagged_not_applied(amount):
+    prices = _prices((date(2020, 3, 2), 100.0), (date(2020, 3, 3), 99.0))
+    actions = _actions(dict(valid_date=date(2020, 3, 3), amount=amount, currency="USD"))
+    assert _rows(_tr(prices, actions))[-1] == (date(2020, 3, 3), 0.99, "action_invalid")
+
+
+def test_invalid_action_does_not_abort_other_instruments():
+    prices = pa.concat_tables(
+        [
+            _prices((date(2020, 3, 2), 100.0), (date(2020, 3, 3), 50.0)),
+            _prices(
+                (date(2020, 3, 2), 10.0, dict(source_symbol="TOKB")),
+                (date(2020, 3, 3), 11.0, dict(source_symbol="TOKB")),
+            ),
+        ]
+    )
+    ids = _ids(("srcx:TOKA", M1), ("srcx:TOKB", M2))
     actions = _actions(dict(valid_date=date(2020, 3, 3), action_type="split"))
-    with pytest.raises(ValueError, match="ratio"):
-        _tr(prices, actions)
+    out = _tr(prices, actions, ids=ids)
+    assert [(r["instrument_id"], r["flags"]) for r in out.to_pylist()] == [
+        (M1, None),
+        (M1, "action_invalid"),
+        (M2, None),
+        (M2, None),
+    ]
+    assert out.column("tr_index").to_pylist() == pytest.approx([1.0, 0.5, 1.0, 1.1])
 
 
-def test_cash_without_amount_raises():
-    prices = _prices((date(2020, 3, 2), 100.0), (date(2020, 3, 3), 50.0))
-    actions = _actions(dict(valid_date=date(2020, 3, 3)))
-    with pytest.raises(ValueError, match="amount"):
-        _tr(prices, actions)
+@pytest.mark.parametrize("bad", [0.0, -5.0, float("nan"), float("inf")])
+def test_invalid_close_treated_as_missing(bad):
+    prices = _prices((date(2020, 3, 2), 100.0), (date(2020, 3, 3), bad), (date(2020, 3, 4), 110.0))
+    assert _rows(_tr(prices)) == [
+        (date(2020, 3, 2), 1.0, None),
+        (date(2020, 3, 4), 1.1, "gap,price_invalid"),
+    ]
+
+
+def test_invalid_first_close_flags_new_base():
+    prices = _prices((date(2020, 3, 2), 0.0), (date(2020, 3, 3), 100.0), (date(2020, 3, 4), 110.0))
+    assert _rows(_tr(prices)) == [
+        (date(2020, 3, 3), 1.0, "price_invalid"),
+        (date(2020, 3, 4), 1.1, None),
+    ]
+
+
+def test_invalid_last_close_dropped():
+    prices = _prices((date(2020, 3, 2), 100.0), (date(2020, 3, 3), -1.0))
+    assert _rows(_tr(prices)) == [(date(2020, 3, 2), 1.0, None)]
+
+
+def test_action_on_invalid_close_moves_to_next_valid_row():
+    prices = _prices((date(2020, 3, 2), 100.0), (date(2020, 3, 3), 0.0), (date(2020, 3, 4), 98.0))
+    out = _tr(prices, _actions(_cash(date(2020, 3, 3), 2.0)))
+    assert _rows(out)[-1] == (date(2020, 3, 4), 1.0, "gap,price_invalid")
+
+
+def test_duplicate_price_rows_raise_listing_keys():
+    rp = pa.table(
+        {
+            "instrument_id": [M1, M1, M2, M2],
+            "session_date": [date(2020, 3, 2)] * 2 + [date(2020, 3, 3)] * 2,
+            "close": [1.0, 2.0, 3.0, 4.0],
+            "volume": pa.array([None] * 4, pa.int64()),
+            "currency": ["USD"] * 4,
+            "source_code": ["srcx"] * 4,
+            "source_symbol": ["TOKA"] * 4,
+        }
+    )
+    ra = resolve_actions(_actions(), IDS, as_of=AS_OF, precedence=())
+    with pytest.raises(ValueError, match=r"2 key\(s\).*2020-03-02.*2020-03-03"):
+        total_return(rp, ra, _sessions(date(2020, 3, 2), date(2020, 3, 3)))
+
+
+def test_two_symbols_of_one_source_on_one_instrument_day_raise():
+    prices = pa.concat_tables(
+        [
+            _prices((date(2020, 3, 2), 100.0)),
+            _prices((date(2020, 3, 2), 100.0, dict(source_symbol="TOKB"))),
+        ]
+    )
+    ids = _ids(("srcx:TOKA", M1), ("srcx:TOKB", M1))
+    with pytest.raises(ValueError, match=r"srcx:TOKA.*srcx:TOKB"):
+        resolve_prices(prices, ids, as_of=AS_OF, precedence=("srcx",))
+
+
+def test_conflict_error_lists_up_to_ten_keys():
+    days = [date(2020, 3, 2 + i) for i in range(12)]
+    prices = pa.concat_tables(
+        [_prices(*[(d, 100.0, dict(source_code=src)) for d in days]) for src in ("srca", "srcb")]
+    )
+    ids = _ids(("srca:TOKA", M1), ("srcb:TOKA", M1))
+    with pytest.raises(ValueError) as err:
+        resolve_prices(prices, ids, as_of=AS_OF, precedence=())
+    msg = str(err.value)
+    assert "12 key(s)" in msg and "first 10" in msg
+    assert days[9].isoformat() in msg and days[10].isoformat() not in msg
+
+
+def test_ambiguity_error_lists_up_to_ten_keys():
+    days = [date(2020, 3, 2 + i) for i in range(12)]
+    prices = pa.concat_tables(
+        [
+            _prices(*[(d, 100.0) for d in days]),
+            _prices(*[(d, 100.0, dict(source_symbol="TOKB")) for d in days[:1]]),
+        ]
+    )
+    ids = _ids(("srcx:TOKA", M1), ("srcx:TOKA", M2), ("srcx:TOKB", M1), ("srcx:TOKB", M2))
+    with pytest.raises(ValueError, match="ambiguous") as err:
+        resolve_prices(prices, ids, as_of=AS_OF, precedence=())
+    msg = str(err.value)
+    assert "13 (symbol, date) key(s)" in msg and "first 10" in msg
+    assert "2020-03-11" in msg and "2020-03-12" not in msg  # sorted, capped at 10
+    assert "srcx:TOKB" not in msg  # 13th key, beyond the cap
+
+
+def test_action_on_base_row_ignored():
+    prices = _prices((date(2020, 3, 2), 100.0), (date(2020, 3, 3), 100.0))
+    actions = _actions(_split(date(2020, 3, 1), 1.0, 2.0), _cash(date(2020, 3, 2), 5.0))
+    assert _rows(_tr(prices, actions)) == [
+        (date(2020, 3, 2), 1.0, None),
+        (date(2020, 3, 3), 1.0, None),
+    ]
+
+
+def test_null_currency_dividend_flagged_mismatch():
+    prices = _prices((date(2020, 3, 2), 100.0), (date(2020, 3, 3), 99.0))
+    actions = _actions(dict(_cash(date(2020, 3, 3), 1.0), currency=None))
+    assert _rows(_tr(prices, actions))[-1] == (date(2020, 3, 3), 0.99, "currency_mismatch")
+
+
+def test_valued_spin_off_currency_mismatch_not_applied():
+    prices = _prices((date(2020, 3, 2), 100.0), (date(2020, 3, 3), 80.0))
+    actions = _actions(dict(_cash(date(2020, 3, 3), 20.0, currency="EUR"), action_type="spin_off"))
+    assert _rows(_tr(prices, actions))[-1] == (date(2020, 3, 3), 0.8, "currency_mismatch")
+
+
+@pytest.mark.parametrize("basis", [None, "old_share"])
+def test_dividend_before_split_in_one_gap_not_rescaled(basis):
+    # No price on 07-07 nor 07-08: a dividend of 1.0 (ex 07-07, on the pre-split share) and a
+    # 2:1 split (ex 07-08) both land on 07-09. One share at 100 -> 1.0 cash + 2 x 49.5 = 100.
+    prices = _prices((date(2020, 7, 6), 100.0), (date(2020, 7, 9), 49.5))
+    actions = _actions(
+        _cash(date(2020, 7, 7), 1.0, per_share_basis=basis),
+        _split(date(2020, 7, 8), 1.0, 2.0),
+    )
+    assert _rows(_tr(prices, actions))[-1] == (date(2020, 7, 9), 1.0, "gap")
+
+
+def test_dividend_after_split_in_one_gap_per_new_share():
+    # Split ex 07-07, then 0.5 per (new) share ex 07-08: 2 x 49.5 + 2 x 0.5 = 100.
+    prices = _prices((date(2020, 7, 6), 100.0), (date(2020, 7, 9), 49.5))
+    actions = _actions(_split(date(2020, 7, 7), 1.0, 2.0), _cash(date(2020, 7, 8), 0.5))
+    assert _rows(_tr(prices, actions))[-1] == (date(2020, 7, 9), 1.0, "gap")
 
 
 def test_bad_parameters():
