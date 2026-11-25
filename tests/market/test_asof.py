@@ -135,3 +135,31 @@ def test_sessions_range_crossing_holiday_from_non_session_day():
     # Starts on a Saturday (non-session day).
     s = sessions("XNYS", date(2024, 11, 30), date(2024, 12, 3))
     assert s.column("session_date").to_pylist() == [date(2024, 12, 2), date(2024, 12, 3)]
+
+
+def test_tie_on_an_older_known_at_is_not_rejected():
+    t1 = datetime(2024, 5, 1, tzinfo=UTC)
+    t2 = datetime(2024, 5, 2, tzinfo=UTC)
+    t = _table(
+        [
+            ("a", date(2024, 5, 1), t1, 1),
+            ("a", date(2024, 5, 1), t1, 2),
+            ("a", date(2024, 5, 1), t2, 3),
+        ]
+    )
+    assert latest(t, ["k"]).column("v").to_pylist() == [3]
+    assert asof(t, ["k"], datetime(2024, 6, 1, tzinfo=UTC)).column("v").to_pylist() == [3]
+    with pytest.raises(ValueError, match="latest known_at"):
+        asof(t, ["k"], datetime(2024, 5, 1, 12, tzinfo=UTC))
+
+
+def test_latest_keeps_input_row_order():
+    t = _table(
+        [
+            ("b", date(2024, 5, 1), datetime(2024, 5, 1, tzinfo=UTC), 1),
+            ("a", date(2024, 5, 1), datetime(2024, 5, 3, tzinfo=UTC), 2),
+            ("a", date(2024, 5, 1), datetime(2024, 5, 2, tzinfo=UTC), 3),
+            ("c", date(2024, 5, 1), datetime(2024, 5, 1, tzinfo=UTC), 4),
+        ]
+    )
+    assert latest(t, ["k"]).column("v").to_pylist() == [1, 2, 4]

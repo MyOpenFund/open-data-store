@@ -11,6 +11,7 @@ import warnings
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
 
+import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 
@@ -24,31 +25,44 @@ def _check_nulls(table: pa.Table, keys: Sequence[str]) -> None:
             raise ValueError(f"column {name!r} contains null values")
 
 
-def _latest_per_key(table: pa.Table, natural_key: Sequence[str]) -> pa.Table:
+def _latest_per_key(
+    table: pa.Table, natural_key: Sequence[str], candidates: np.ndarray | None = None
+) -> pa.Table:
+    """Latest row per key among ``candidates`` (row indices of ``table``; all rows if None)."""
     keys = list(natural_key)
     _check_nulls(table, keys)
-    for reserved in (_ROW, _MAX):
+    for reserved in (_ROW, _MAX):  # kept reserved for internal use
         if reserved in table.column_names:
             raise ValueError(f"column name {reserved!r} is reserved")
-    if table.num_rows == 0:
-        return table
-    # Join only the key columns, known_at and a row index: payload columns (lists, structs)
-    # never enter the join.
-    slim = table.select([*keys, "known_at"]).append_column(
-        _ROW, pa.array(range(table.num_rows), pa.int64())
-    )
-    top = slim.group_by(keys, use_threads=False).aggregate([("known_at", "max")])
-    top = top.rename_columns([*keys, _MAX])
-    joined = slim.join(top, keys=keys, join_type="inner")
-    joined = joined.filter(pc.equal(joined["known_at"], joined[_MAX]))
+    # Sort only the key columns and known_at of the candidates (payload columns never move),
+    # then keep the last row of each key run; the payload is taken once, at the end.
+    slim = table.select([*keys, "known_at"])
+    if candidates is not None:
+        slim = slim.take(pa.array(candidates, pa.int64()))
+    if slim.num_rows == 0:
+        return table.slice(0, 0)
+    order = pc.sort_indices(slim, sort_keys=[(k, "ascending") for k in (*keys, "known_at")])
+    ordered = slim.take(order)
+    n = ordered.num_rows
+    same_key = pa.array(np.ones(n - 1, bool))
+    for name in keys:
+        col = ordered[name].combine_chunks()
+        same_key = pc.and_(same_key, pc.equal(col.slice(0, n - 1), col.slice(1)))
+    known = ordered["known_at"].combine_chunks()
     # A tie on (key, known_at) is malformed input: the publisher refuses duplicates.
-    counts = joined.group_by(keys, use_threads=False).aggregate([(_ROW, "count")])
-    tied = counts.filter(pc.greater(counts[f"{_ROW}_count"], 1))
-    if tied.num_rows:
-        example = {k: tied[k][0].as_py() for k in keys}
+    # Only a tie at the latest known_at of a key matters (the pair ends its key run).
+    same = same_key.to_numpy(zero_copy_only=False)
+    is_last = np.append(~same, True)
+    tied = same & pc.equal(known.slice(0, n - 1), known.slice(1)).to_numpy(zero_copy_only=False)
+    tied &= is_last[1:]
+    if tied.any():
+        first = int(np.flatnonzero(tied)[0])
+        example = {k: ordered[k][first].as_py() for k in keys}
         raise ValueError(f"several rows share the latest known_at for key {example}")
-    rows = pc.sort_indices(joined[_ROW])
-    return table.take(joined[_ROW].take(rows))
+    rows = np.sort(order.to_numpy()[is_last])
+    if candidates is not None:
+        rows = candidates[rows]
+    return table.take(pa.array(rows, pa.int64()))
 
 
 def latest(table: pa.Table, natural_key: Sequence[str]) -> pa.Table:
@@ -75,7 +89,8 @@ def asof(table: pa.Table, natural_key: Sequence[str], as_of: datetime) -> pa.Tab
         pc.less_equal(table["known_at"], bound),
         pc.less_equal(table["valid_date"], pa.scalar(as_of_utc.date(), type=pa.date32())),
     )
-    return _latest_per_key(table.filter(mask), natural_key)
+    visible = np.flatnonzero(pc.fill_null(mask, False).to_numpy(zero_copy_only=False))
+    return _latest_per_key(table, natural_key, visible)
 
 
 def sessions(mic: str, start: date, end: date) -> pa.Table:
