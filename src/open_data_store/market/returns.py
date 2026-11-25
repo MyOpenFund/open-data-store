@@ -30,7 +30,8 @@ Return of a price session t against the previous valid price session p of the in
   close, or the next price when the ex-date had none): ``r(t) = (n * close(t) + cash) /
   close(p) - 1``. On a single ex-date this is ``(close(t) + D) / (close(p) * F) - 1`` with
   ``F = ratio_old / ratio_new``. An amount with ``per_share_basis = "old_share"`` is converted to
-  new shares of a same-day split (``amount * F``); ``"new_share"`` or null is used as is. A
+  new shares of a same-day split (``amount * F``); ``"new_share"`` is used as is; a null basis is
+  used as is without a same-day split, and flags ``action_invalid`` (not applied) with one. A
   dividend dated before a later split within one gap is credited on the pre-split share count,
   never rescaled by that later split.
 - ``amount`` is used as filed, gross or net (``amount_basis`` is not converted).
@@ -46,8 +47,9 @@ row never aborts the universe:
 - ``currency_change``: the price currency of t differs from that of p; r(t) = 0, never converted.
 - ``spin_off_unvalued``: a spin-off with no amount; not applied (manual source precedence, §7.4).
 - ``rights_unvalued``: a rights issue; never applied.
-- ``action_invalid``: a split or stock dividend without positive finite ratios, or a cash action
-  (spin-off with an amount included) whose amount is not finite and positive; not applied.
+- ``action_invalid``: a split or stock dividend without positive finite ratios, a cash action
+  (spin-off with an amount included) whose amount is not finite and positive, or one with a null
+  ``per_share_basis`` on the ex-date of an applied split or stock dividend; not applied.
 - ``price_invalid``: a close that is not finite and positive is treated as a missing price; the
   instrument's next valid row carries ``price_invalid`` and ``gap`` (``price_invalid`` alone when
   it is the base row).
@@ -312,6 +314,7 @@ def _action_return(
     for _, group in groupby(ordered, key=lambda a: a["ex_date"]):
         acts = list(group)
         day_factor = 1.0  # ratio_old / ratio_new of this ex-date's splits
+        split_today = False
         for act in acts:
             if act["action_type"] not in _RATIO_TYPES:
                 continue
@@ -321,6 +324,7 @@ def _action_return(
                 continue
             shares *= new / old
             day_factor *= old / new
+            split_today = True
         for act in acts:
             kind, amount = act["action_type"], act["amount"]
             if kind == "rights":
@@ -336,6 +340,9 @@ def _action_return(
                 continue
             if act["currency"] != currency:
                 flags.add("currency_mismatch")
+                continue
+            if split_today and act["per_share_basis"] is None:
+                flags.add("action_invalid")  # old or new share decides the amount: never guess
                 continue
             per_share = amount * day_factor if act["per_share_basis"] == "old_share" else amount
             cash += shares * per_share

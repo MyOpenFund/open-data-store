@@ -251,11 +251,23 @@ def test_old_share_dividend_with_same_day_split_converted():
     assert _rows(_tr(prices, actions))[-1] == (date(2020, 3, 3), 1.0, None)
 
 
-def test_null_basis_dividend_with_same_day_split_used_as_is():
+def test_null_basis_dividend_with_same_day_split_is_action_invalid():
+    # The basis decides between 0.5 and 0.25 per new share: never guessed, the cash is not applied.
     prices = _prices((date(2020, 3, 2), 100.0), (date(2020, 3, 3), 49.5))
     actions = _actions(
         _split(date(2020, 3, 3), 1.0, 2.0), _cash(date(2020, 3, 3), 0.5, per_share_basis=None)
     )
+    assert _rows(_tr(prices, actions))[-1] == (date(2020, 3, 3), 0.99, "action_invalid")
+    spin = _actions(
+        _split(date(2020, 3, 3), 1.0, 2.0),
+        dict(_cash(date(2020, 3, 3), 0.5), action_type="spin_off"),
+    )
+    assert _rows(_tr(prices, spin))[-1] == (date(2020, 3, 3), 0.99, "action_invalid")
+
+
+def test_null_basis_dividend_without_same_day_split_used_as_is():
+    prices = _prices((date(2020, 3, 2), 100.0), (date(2020, 3, 3), 99.5))
+    actions = _actions(_cash(date(2020, 3, 3), 0.5, per_share_basis=None))
     assert _rows(_tr(prices, actions))[-1] == (date(2020, 3, 3), 1.0, None)
 
 
@@ -569,10 +581,11 @@ def test_two_symbols_of_one_source_with_identical_values_are_kept_once():
 
 
 def test_identical_actions_of_two_symbols_of_one_source_are_kept_once():
+    new = dict(per_share_basis="new_share")
     actions = _actions(
-        _cash(date(2020, 3, 3), 1.0),
+        _cash(date(2020, 3, 3), 1.0, **new),
         _split(date(2020, 3, 3), 1.0, 2.0),
-        _cash(date(2020, 3, 3), 1.0, source_symbol="TOKB"),
+        _cash(date(2020, 3, 3), 1.0, source_symbol="TOKB", **new),
         _split(date(2020, 3, 3), 1.0, 2.0, source_symbol="TOKB"),
     )
     out = resolve_actions(actions, VENUE_IDS, as_of=AS_OF, precedence=())
