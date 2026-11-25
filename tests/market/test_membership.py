@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta, timezone
 
+import numpy as np
 import pyarrow as pa
 import pytest
 from conftest import identifier_row, snapshot_row, table
@@ -386,3 +387,94 @@ def test_parameters_validated():
         membership_intervals(snaps, ids, index_code="idx1", as_of=datetime(2020, 2, 5))
     with pytest.raises(TypeError, match="precedence"):
         _run(snaps, ids, date(2020, 2, 5), precedence="srcx")
+    for bad in (3.0, "3", True):
+        with pytest.raises(TypeError, match="staleness_days"):
+            _run(snaps, ids, date(2020, 2, 5), staleness_days=bad)
+
+
+def test_staleness_days_accepts_any_integral():
+    snaps, ids = _snaps((date(2020, 1, 31), "TOKA")), _ids(("srcx:TOKA", M1))
+    out = _run(snaps, ids, date(2020, 2, 5), staleness_days=np.int64(3))
+    assert _rows(out) == [(M1, date(2020, 1, 31), date(2020, 2, 3), "srcx")]
+
+
+# --- review follow-ups -------------------------------------------------------------------------
+
+
+def test_all_non_member_snapshot_closes_every_interval():
+    snaps = _snaps(
+        (date(2020, 1, 31), "TOKA"),
+        (date(2020, 1, 31), "TOKB"),
+        (date(2020, 2, 29), "TOKA", dict(is_member=False)),
+        (date(2020, 2, 29), "TOKB", dict(is_member=False)),
+    )
+    ids = _ids(("srcx:TOKA", M1), ("srcx:TOKB", M2))
+    out = _run(snaps, ids, date(2020, 3, 5))
+    assert _rows(out) == [
+        (M1, date(2020, 1, 31), date(2020, 2, 29), "srcx"),
+        (M2, date(2020, 1, 31), date(2020, 2, 29), "srcx"),
+    ]
+
+
+def test_losing_source_unmapped_symbol_not_reported():
+    y = dict(source_code="srcy")
+    snaps = pa.concat_tables(
+        [
+            _snaps((date(2020, 1, 31), "TOKA")),
+            _snaps((date(2020, 1, 31), "TOKA", y), (date(2020, 1, 31), "TOKQ", y)),
+        ]
+    )
+    ids = _ids(("srcx:TOKA", M1), ("srcy:TOKA", M1))  # srcy:TOKQ unmapped, but srcy loses
+    as_of = _at(date(2020, 2, 5))
+    kw = dict(index_code="idx1", as_of=as_of, precedence=("srcx", "srcy"))
+    assert unresolved_members(snaps, ids, **kw).num_rows == 0
+    assert _rows(membership_intervals(snaps, ids, **kw)) == [(M1, date(2020, 1, 31), None, "srcx")]
+
+
+def test_preferred_source_unmapped_leaves_universe_hole():
+    y = dict(source_code="srcy")
+    snaps = pa.concat_tables(
+        [
+            _snaps((date(2020, 1, 31), "TOKA"), (date(2020, 2, 29), "TOKA")),
+            _snaps((date(2020, 1, 31), "TOKA", y), (date(2020, 2, 29), "TOKA", y)),
+        ]
+    )
+    # srcx:TOKA maps only from 2020-02-01; srcy:TOKA maps on both dates.
+    ids = _ids(
+        ("srcx:TOKA", M1, dict(valid_date=date(2020, 2, 1))),
+        ("srcy:TOKA", M1),
+    )
+    kw = dict(index_code="idx1", as_of=_at(date(2020, 3, 5)), precedence=("srcx", "srcy"))
+    # No fallback to srcy on 2020-01-31: the instrument is missing that month.
+    assert _rows(membership_intervals(snaps, ids, **kw)) == [(M1, date(2020, 2, 29), None, "srcx")]
+    assert [tuple(r.values()) for r in unresolved_members(snaps, ids, **kw).to_pylist()] == [
+        ("srcx", "TOKA", date(2020, 1, 31), date(2020, 1, 31))
+    ]
+
+
+def test_restatement_omitting_symbol_keeps_old_row():
+    d = date(2020, 1, 31)
+    late = dict(known_at=_at(date(2020, 2, 10)))
+    ids = _ids(("srcx:TOKA", M1), ("srcx:TOKB", M2))
+    # Restatement re-files TOKA only: the TOKB row of the original filing stays visible.
+    omitted = _snaps((d, "TOKA"), (d, "TOKB"), (d, "TOKA", late))
+    assert [r[0] for r in _rows(_run(omitted, ids, date(2020, 2, 15)))] == [M1, M2]
+    # The ingestor contract: a removal is an explicit is_member = false row.
+    explicit = _snaps(
+        (d, "TOKA"), (d, "TOKB"), (d, "TOKA", late), (d, "TOKB", dict(is_member=False, **late))
+    )
+    assert [r[0] for r in _rows(_run(explicit, ids, date(2020, 2, 15)))] == [M1]
+
+
+def test_last_snapshot_staleness_uses_utc_date_of_non_utc_as_of():
+    snaps, ids = _snaps((date(2020, 1, 31), "TOKA")), _ids(("srcx:TOKA", M1))
+
+    def run(as_of):
+        return _rows(membership_intervals(snaps, ids, index_code="idx1", as_of=as_of))
+
+    # 2020-03-16 20:00 at UTC-5 is 2020-03-17 01:00 UTC: 46 days, closed at D + 45.
+    west = datetime(2020, 3, 16, 20, tzinfo=timezone(timedelta(hours=-5)))
+    assert run(west) == [(M1, date(2020, 1, 31), date(2020, 3, 16), "srcx")]
+    # 2020-03-17 02:00 at UTC+5 is 2020-03-16 21:00 UTC: 45 days, still open.
+    east = datetime(2020, 3, 17, 2, tzinfo=timezone(timedelta(hours=5)))
+    assert run(east) == [(M1, date(2020, 1, 31), None, "srcx")]

@@ -20,9 +20,17 @@ Rules:
   ``valid_to`` null or D < ``valid_to``), so a recycled symbol maps to different instruments on
   disjoint ranges. No covering row: the member is unresolved (``unresolved_members``), never in
   the intervals. Covering rows naming different instruments raise ``ValueError``.
+- Only the chosen source of a date is resolved: when the preferred source's symbol is unmapped on
+  a date, the instrument drops out for that date even if a lower-precedence source has it mapped,
+  and the symbol appears in ``unresolved_members``. That is a universe hole the caller must check;
+  symbols of a losing source are never reported.
 - Several symbols of one snapshot mapping to one instrument count once. Adjacent intervals of one
   instrument from the same source are merged; a change of source splits the interval at the
   switch date (no gap), so each row keeps the source it came from.
+
+Precondition: ``asof`` selects per natural key (source, index, symbol, date), so a restated
+snapshot that merely omits a symbol leaves the old row for that symbol visible. Ingestors must
+emit an ``is_member = false`` row for every symbol a restatement removes.
 
 ``staleness_days`` defaults to ``DEFAULT_STALENESS_DAYS`` (45): a documented parameter, to be set
 from measurements on real data (spec §11).
@@ -30,6 +38,7 @@ from measurements on real data (spec §11).
 
 from __future__ import annotations
 
+import operator
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -79,15 +88,23 @@ class _Snapshot:
     unresolved: frozenset[str]  # source symbols
 
 
-def _validate(as_of: datetime, staleness_days: int, precedence: Sequence[str]) -> None:
+def _validate(as_of: datetime, staleness_days: int, precedence: Sequence[str]) -> int:
+    """Check the parameters; return ``staleness_days`` as a plain int."""
     if as_of.tzinfo is None or as_of.utcoffset() is None:
         raise ValueError("as_of must be a timezone-aware datetime")
-    if isinstance(staleness_days, bool) or not isinstance(staleness_days, int):
-        raise TypeError("staleness_days must be an int")
-    if staleness_days <= 0:
-        raise ValueError(f"staleness_days must be > 0, got {staleness_days}")
+    if isinstance(staleness_days, bool):
+        raise TypeError("staleness_days must be an integral number of days, not a bool")
+    try:
+        days = operator.index(staleness_days)
+    except TypeError:
+        raise TypeError(
+            f"staleness_days must be an integral number of days, got {staleness_days!r}"
+        ) from None
+    if days <= 0:
+        raise ValueError(f"staleness_days must be > 0, got {days}")
     if isinstance(precedence, str):
         raise TypeError("precedence must be a sequence of source codes, not a string")
+    return days
 
 
 def _symbol_mappings(identifiers: pa.Table) -> dict[str, list[tuple[date, date | None, str]]]:
@@ -183,10 +200,15 @@ def membership_intervals(
 
     ``snapshots`` follows ``INDEX_SNAPSHOTS``, ``identifiers`` follows ``INSTRUMENT_IDENTIFIERS``.
     Returns ``INTERVALS_SCHEMA`` rows sorted by (instrument_id, valid_from); ``valid_to`` null
-    means still a member at the last snapshot. See the module docstring for the rules."""
-    _validate(as_of, staleness_days, precedence)
+    means still a member at the last snapshot. See the module docstring for the rules.
+
+    ``staleness_days`` accepts any integral value (``operator.index``) > 0. With several sources
+    in ``precedence``, rows are not one per membership spell: a source switch splits a spell into
+    contiguous rows. Coalesce contiguous rows of an instrument before deriving entries, exits or
+    turnover."""
+    days = _validate(as_of, staleness_days, precedence)
     chosen = _chosen_snapshots(snapshots, identifiers, index_code, as_of, precedence)
-    cap = timedelta(days=staleness_days)
+    cap = timedelta(days=days)
     as_of_date = as_of.astimezone(UTC).date()
 
     # instrument -> [(valid_from, valid_to, source_code)] in date order, merged on the fly.
