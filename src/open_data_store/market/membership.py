@@ -47,8 +47,9 @@ from datetime import UTC, date, datetime, timedelta
 import pyarrow as pa
 import pyarrow.compute as pc
 
-from open_data_store.contracts.standard.market import INDEX_SNAPSHOTS, INSTRUMENT_IDENTIFIERS
-from open_data_store.market.asof import asof, latest
+from open_data_store.contracts.standard.market import INDEX_SNAPSHOTS
+from open_data_store.market._mapping import resolve, symbol_mappings, symbol_token
+from open_data_store.market.asof import asof
 
 __all__ = [
     "DEFAULT_STALENESS_DAYS",
@@ -59,7 +60,6 @@ __all__ = [
 ]
 
 DEFAULT_STALENESS_DAYS = 45
-SYMBOL_SCHEME = "source_symbol"
 
 INTERVALS_SCHEMA = pa.schema(
     [
@@ -107,35 +107,6 @@ def _validate(as_of: datetime, staleness_days: int, precedence: Sequence[str]) -
     return days
 
 
-def _symbol_mappings(identifiers: pa.Table) -> dict[str, list[tuple[date, date | None, str]]]:
-    """id_value -> [(valid_date, valid_to, instrument_id)] for source_symbol rows, read latest."""
-    rows = latest(identifiers, INSTRUMENT_IDENTIFIERS.natural_key)
-    rows = rows.filter(pc.equal(rows["id_scheme"], SYMBOL_SCHEME))
-    out: dict[str, list[tuple[date, date | None, str]]] = defaultdict(list)
-    cols = rows.select(["id_value", "valid_date", "valid_to", "instrument_id"]).to_pydict()
-    for value, start, end, instrument in zip(
-        cols["id_value"], cols["valid_date"], cols["valid_to"], cols["instrument_id"], strict=True
-    ):
-        out[value].append((start, end, instrument))
-    return out
-
-
-def _resolve(
-    mappings: dict[str, list[tuple[date, date | None, str]]], token: str, on: date
-) -> str | None:
-    found = {
-        instrument
-        for start, end, instrument in mappings.get(token, ())
-        if start <= on and (end is None or on < end)
-    }
-    if len(found) > 1:
-        raise ValueError(
-            f"ambiguous mapping for symbol {token!r} on {on.isoformat()}: "
-            f"several instruments {sorted(found)}; fix the mapping upstream"
-        )
-    return next(iter(found), None)
-
-
 def _chosen_snapshots(
     snapshots: pa.Table,
     identifiers: pa.Table,
@@ -167,7 +138,7 @@ def _chosen_snapshots(
             )
         order = sorted(sources)
 
-    mappings = _symbol_mappings(identifiers)
+    mappings = symbol_mappings(identifiers)
     chosen: list[_Snapshot] = []
     for d in sorted(by_date):
         src = next((s for s in order if s in by_date[d]), None)
@@ -178,7 +149,7 @@ def _chosen_snapshots(
         for sym, member in by_date[d][src]:
             if not member:
                 continue
-            instrument = _resolve(mappings, f"{src}:{sym}", d)
+            instrument = resolve(mappings, symbol_token(src, sym), d)
             if instrument is None:
                 unresolved.add(sym)
             else:
