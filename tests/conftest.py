@@ -181,3 +181,39 @@ def action_row(**over):
     )
     base.update(over)
     return base
+
+
+def snapshot_row(**over):
+    base = dict(
+        index_code="idx1",
+        source_symbol="TOKA",
+        snapshot_size=1,
+        weight=None,
+        is_member=True,
+        known_at_basis="snapshot_date",
+        valid_date=date(2025, 6, 30),
+        known_at=ts("2025-06-30T23:00:00"),
+        known_at_kind="published",
+        source_code="srcx",
+        source_doc_id=None,
+    )
+    base.update(over)
+    return base
+
+
+def identifier_row(**over):
+    base = dict(
+        instrument_id="mof:" + "1" * 32,
+        id_scheme="source_symbol",
+        id_value="srcx:TOKA",
+        valid_to=None,
+        link_reason=None,
+        known_at_basis="load_time",
+        valid_date=date(1990, 1, 1),
+        known_at=ts("2026-01-01T00:00:00"),
+        known_at_kind="published",
+        source_code="mapper",
+        source_doc_id=None,
+    )
+    base.update(over)
+    return base
