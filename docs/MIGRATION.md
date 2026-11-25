@@ -87,3 +87,12 @@ market contracts (`prices`, `corporate_actions`, `vendor_total_return`, `index_s
 `instrument_identifiers`, `fetch_log`) must be approved on a store before producers publish them
 (`open-data-store contracts list` shows them). The recipes need the new optional extra
 `myopenfund-open-data-store[recipes]`.
+
+Two behaviour changes outside market data:
+
+- `conform` (the writer's and the publisher's validation): a null now passes the vocabulary
+  check of a nullable column with allowed values; it used to be refused
+  (`value_not_allowed`). Required columns still refuse nulls (`nulls_in_required`). No
+  fingerprint changes; a batch refused before only for such nulls is accepted now.
+- `Store.is_published(dataset)` is new: true when the dataset is approved and a first batch was
+  published (its table exists); `UnknownDataset` when it is not approved.

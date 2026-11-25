@@ -18,6 +18,7 @@ Renamed on 2026-11-22 (package, import, command and environment variables): see
 pip install "myopenfund-open-data-store[writer]"     # producers: pyarrow only
 pip install "myopenfund-open-data-store[publisher]"  # store operator: DuckDB + DuckLake
 pip install "myopenfund-open-data-store[reader]"     # analyses, MCP, strategies
+pip install "myopenfund-open-data-store[recipes]"    # market-data recipes (exchange calendars)
 ```
 
 If this environment installed the old distribution (`open-data-store`, from a git URL), run
@@ -88,7 +89,8 @@ pruning.
 
 Six standard contracts (v1, all `fact`, partitioned by `source_code`): `prices` (raw OHLCV per
 provider series and session), `corporate_actions` (splits, dividends, spin-offs, as filed),
-`vendor_total_return` (a vendor's own total-return series, for comparison only),
+`vendor_total_return` (a vendor's own total-return series: a control, and the documented fallback
+where corporate actions are missing; never mixed into `prices`),
 `index_snapshots` (index membership per snapshot date), `instrument_identifiers` (dated mappings
 of provider symbols and FIGI/ISIN/CIK to an opaque `mof:` instrument id) and `fetch_log` (what was
 fetched, with its status). Approve them on a store before producers publish.
@@ -163,8 +165,9 @@ ref = write_batch(contract, table, landing_root=data_root / "landing",
 
 The writer validates the table against its contract and drops an atomic, idempotent batch in
 `landing/`. It never touches Postgres. A producer declares its own contracts through the
-`open_data_store.contracts` entry-point group; standard contracts (`fundamentals`, `entity_observations`,
-`filing_statements`, `filings`) ship with this library.
+`open_data_store.contracts` entry-point group; ten standard contracts ship with this library
+(`fundamentals`, `entity_observations`, `filing_statements`, `filings`, and the six market
+contracts of "Market data").
 
 ## Operator
 
