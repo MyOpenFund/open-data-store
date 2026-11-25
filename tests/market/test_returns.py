@@ -103,7 +103,7 @@ def _rows(out: pa.Table):
     ]
 
 
-# --- brief tests -------------------------------------------------------------------------------
+# --- core rules --------------------------------------------------------------------------------
 
 
 def test_dividend_reinvested_at_ex_close():
@@ -197,7 +197,7 @@ def test_forward_index_not_rewritten_by_future_action():
     assert early.column("tr_index").to_pylist()[-1] == pytest.approx(120 / 99 * 0.5)
 
 
-# --- ruling tests ------------------------------------------------------------------------------
+# --- flags and edge cases ----------------------------------------------------------------------
 
 
 def test_missing_price_session_flags_gap():

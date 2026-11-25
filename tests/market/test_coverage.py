@@ -109,7 +109,7 @@ def _session(result, d):
     return next(r for r in rows if r["session_date"] == d)
 
 
-# --- brief tests --------------------------------------------------------------------------
+# --- core rules ---------------------------------------------------------------------------
 
 
 def test_unexplained_gap_fails():
@@ -227,7 +227,7 @@ def test_member_with_only_invalid_closes():
     reasons = _reasons(result, M2)
     assert reasons[DAYS[0]] == "not_fetched"
     assert reasons[DAYS[1]] == reasons[DAYS[2]] == "price_invalid"
-    # No valid price ever: nothing anchors a delisting (ruling 21).
+    # No valid price ever: nothing anchors a delisting.
     assert {reasons[d] for d in DAYS[3:]} == {"not_fetched"}
     assert result.passed is False
     assert delisting_exits(intervals, prices, _sessions()).num_rows == 0
@@ -539,7 +539,7 @@ def test_exits_match_delisted_cells_random(seed, with_fetch):
     _assert_exits_inside_membership(exits, intervals)
 
 
-# --- ruling 21: delistings bounded to the spell of the last valid price --------------------
+# --- delistings bounded to the spell of the last valid price ------------------------------
 
 
 def test_rejoin_after_a_gap_without_prices():
@@ -585,7 +585,7 @@ def test_adjacent_intervals_form_one_spell():
     assert {_reasons(result, M2)[d] for d in DAYS[2:]} == {"delisted"}
 
 
-# --- ruling 22: a delisting must be corroborated ------------------------------------------
+# --- a delisting must be corroborated -----------------------------------------------------
 
 
 def test_partial_feed_with_error_fetch_is_not_delisted():
@@ -665,7 +665,7 @@ def test_min_delisting_gap_sessions_refused(value):
         delisting_exits(*args, min_delisting_gap_sessions=value)
 
 
-# --- ruling 23: latest published session over members only --------------------------------
+# --- latest published session over members only -------------------------------------------
 
 
 def test_non_member_price_does_not_publish_a_session():
@@ -709,7 +709,7 @@ def _assert_exits_inside_membership(exits, intervals):
         ), row
 
 
-# --- unmapped members (unresolved_members) ---------------------------------------------------
+# --- unmapped members (unresolved_members) ------------------------------------------------
 
 
 def _unresolved(*rows):

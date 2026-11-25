@@ -18,7 +18,7 @@ Inputs (pure Arrow tables):
 
 Expected cells: every (instrument, session) where the session lies in one of the instrument's
 intervals (and so is <= the last session of ``sessions``). The *latest published session* is the
-latest ``session_date`` of ``prices_resolved`` among instruments of ``intervals`` (ruling 23).
+latest ``session_date`` of ``prices_resolved`` among instruments of ``intervals``.
 Reason per cell, first match wins:
 
 1. ``ok``: a resolved price with a valid close;
@@ -26,7 +26,7 @@ Reason per cell, first match wins:
    trailing invalid close never disappears;
 3. ``session_not_published``: the session is after the latest published session (no member price
    at all: never matches);
-4. delisting candidate (rulings 21, 22): the instrument has a valid close; the session is after
+4. delisting candidate: the instrument has a valid close; the session is after
    its last price row (valid or not) and inside the merged membership spell that contains its
    last valid price date (a later spell, after a rejoin, is never a delisting). The candidate is
    ``delisted`` only when corroborated, else ``not_fetched``:
@@ -41,8 +41,8 @@ Reason per cell, first match wins:
    status ``ok``, ``empty`` or ``not_found``;
 6. ``not_fetched``: anything else.
 
-``session_not_published`` is checked before the delisting step (controller ruling 3 lists them
-the other way): otherwise a feed one day behind for everyone would read as delistings.
+``session_not_published`` is checked before the delisting step: otherwise a feed one day behind
+for everyone would read as delistings.
 ``unmapped`` and ``recycled_at_source`` stay in ``REASONS`` for producers that see source
 symbols; ``per_member`` never carries them (it is keyed by instrument, and an unmapped symbol has
 none).

@@ -52,7 +52,7 @@ def _run(snaps, ids, as_of: date, **kw):
     return membership_intervals(snaps, ids, index_code="idx1", as_of=_at(as_of, 12), **kw)
 
 
-# --- brief tests -------------------------------------------------------------------------------
+# --- core rules --------------------------------------------------------------------------------
 
 
 def test_venue_change_no_gap():
@@ -123,7 +123,7 @@ def test_asof_hides_later_snapshot():
     ]
 
 
-# --- controller rulings ------------------------------------------------------------------------
+# --- edge cases --------------------------------------------------------------------------------
 
 
 def test_recycled_symbol_maps_to_disjoint_instruments():
@@ -400,7 +400,7 @@ def test_staleness_days_accepts_any_integral():
     assert _rows(out) == [(M1, date(2020, 1, 31), date(2020, 2, 3), "srcx")]
 
 
-# --- review follow-ups -------------------------------------------------------------------------
+# --- source choice, restatements and staleness -------------------------------------------------
 
 
 def test_all_non_member_snapshot_closes_every_interval():
