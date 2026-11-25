@@ -19,6 +19,7 @@ __all__ = [
     "INDEX_SNAPSHOTS",
     "INSTRUMENT_IDENTIFIERS",
     "KNOWN_AT_BASES",
+    "LINK_REASONS",
     "MARKET_CONTRACTS",
     "MARKET_ID_SCHEMES",
     "PER_SHARE_BASES",
@@ -62,9 +63,10 @@ MARKET_ID_SCHEMES = (
     "successor_of",
 )
 FETCH_STATUSES = ("ok", "empty", "not_found", "partial", "error")
+LINK_REASONS = ("successor", "venue_change", "manual")
 
-LICENCE = "per-source; see the source registry"
-CURRENCY_DOC = "ISO 4217, plus minor units as quoted: GBp, ZAc, ILA."
+_LICENCE = "per-source; see the source registry"
+_CURRENCY_DOC = "ISO 4217, plus minor units as quoted: GBp, ZAc, ILA."
 
 _SOURCE_SYMBOL = Column(
     "source_symbol",
@@ -87,7 +89,7 @@ def _contract(name, doc, columns, natural_key):
         version="1.0.0",
         kind="fact",
         owner="open-data-store",
-        licence=LICENCE,
+        licence=_LICENCE,
         doc=doc,
         columns=(*columns, _KNOWN_AT_BASIS, *BITEMPORAL_COLUMNS),
         natural_key=natural_key,
@@ -107,7 +109,7 @@ PRICES = _contract(
         Column("low", pa.float64(), doc="Session low; null when the source has none."),
         Column("close", pa.float64(), nullable=False, doc="Session close, raw."),
         Column("volume", pa.int64(), doc="Shares traded; null when the source has none."),
-        Column("currency", pa.string(), nullable=False, doc=CURRENCY_DOC),
+        Column("currency", pa.string(), nullable=False, doc=_CURRENCY_DOC),
         Column(
             "price_basis",
             pa.string(),
@@ -124,7 +126,13 @@ CORPORATE_ACTIONS = _contract(
     "One row per corporate action on a provider series. valid_date is the ex-date.",
     (
         _SOURCE_SYMBOL,
-        Column("action_type", pa.string(), nullable=False, allowed=ACTION_TYPES),
+        Column(
+            "action_type",
+            pa.string(),
+            nullable=False,
+            allowed=ACTION_TYPES,
+            doc="Normalised action type; the source's own label is source_action_type.",
+        ),
         Column(
             "action_seq",
             pa.int16(),
@@ -132,12 +140,17 @@ CORPORATE_ACTIONS = _contract(
             doc="Discriminator for two actions of one type on one ex-date (0, 1, ...).",
         ),
         Column("source_action_type", pa.string(), doc="The action type verbatim at the source."),
-        Column("announce_date", pa.date32()),
-        Column("record_date", pa.date32()),
-        Column("pay_date", pa.date32()),
+        Column("announce_date", pa.date32(), doc="Date the action was announced, if known."),
+        Column("record_date", pa.date32(), doc="Record date, if known."),
+        Column("pay_date", pa.date32(), doc="Payment date, if known."),
         Column("amount", pa.float64(), doc="Cash amount per share; null for non-cash actions."),
-        Column("currency", pa.string(), doc=CURRENCY_DOC + " Null for non-cash actions."),
-        Column("amount_basis", pa.string(), allowed=AMOUNT_BASES),
+        Column("currency", pa.string(), doc=_CURRENCY_DOC + " Null for non-cash actions."),
+        Column(
+            "amount_basis",
+            pa.string(),
+            allowed=AMOUNT_BASES,
+            doc="Whether the amount is gross or net of withholding; null for non-cash actions.",
+        ),
         Column(
             "per_share_basis",
             pa.string(),
@@ -186,9 +199,18 @@ INSTRUMENT_IDENTIFIERS = _contract(
     "a correction is a later known_at.",
     (
         Column(
-            "instrument_id", pa.string(), nullable=False, doc="Opaque id minted by the mapping."
+            "instrument_id",
+            pa.string(),
+            nullable=False,
+            doc="Opaque id minted by the mapping: 'mof:' + UUID4 hex.",
         ),
-        Column("id_scheme", pa.string(), nullable=False, allowed=MARKET_ID_SCHEMES),
+        Column(
+            "id_scheme",
+            pa.string(),
+            nullable=False,
+            allowed=MARKET_ID_SCHEMES,
+            doc="Identifier kind; a vocabulary of its own, not the shared ID_SCHEMES.",
+        ),
         Column(
             "id_value",
             pa.string(),
@@ -200,7 +222,8 @@ INSTRUMENT_IDENTIFIERS = _contract(
         Column(
             "link_reason",
             pa.string(),
-            doc="Why the link exists, if not a plain observation: successor, venue change, manual.",
+            allowed=LINK_REASONS,
+            doc="Why the link exists, if not a plain observation.",
         ),
     ),
     ("source_code", "instrument_id", "id_scheme", "id_value", "valid_date"),
@@ -212,12 +235,18 @@ FETCH_LOG = _contract(
     (
         _SOURCE_SYMBOL,
         Column("fetch_id", pa.string(), nullable=False, doc="Identifier of the fetch run."),
-        Column("requested_from", pa.date32(), nullable=False),
-        Column("requested_to", pa.date32(), nullable=False),
+        Column("requested_from", pa.date32(), nullable=False, doc="Start of the requested range."),
+        Column("requested_to", pa.date32(), nullable=False, doc="End of the requested range."),
         Column("returned_from", pa.date32(), doc="Null when nothing was returned."),
         Column("returned_to", pa.date32(), doc="Null when nothing was returned."),
-        Column("status", pa.string(), nullable=False, allowed=FETCH_STATUSES),
-        Column("row_count", pa.int64(), nullable=False),
+        Column(
+            "status",
+            pa.string(),
+            nullable=False,
+            allowed=FETCH_STATUSES,
+            doc="Outcome of the fetch.",
+        ),
+        Column("row_count", pa.int64(), nullable=False, doc="Rows the source returned."),
         Column("archive_ref", pa.string(), doc="Reference to the raw archive of the response."),
     ),
     ("source_code", "source_symbol", "fetch_id", "valid_date"),

@@ -18,7 +18,8 @@ class Column:
     name: str
     type: pa.DataType
     nullable: bool = True
-    allowed: tuple[str, ...] | None = None  # closed vocabulary for string columns
+    # closed vocabulary for string columns; a null passes it (non-nullable columns refuse nulls)
+    allowed: tuple[str, ...] | None = None
     doc: str = ""
 
 

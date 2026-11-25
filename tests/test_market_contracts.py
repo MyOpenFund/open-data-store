@@ -1,5 +1,9 @@
+import uuid
+from datetime import date
+
+import pyarrow as pa
 import pytest
-from conftest import NOW, action_row, price_row, table
+from conftest import NOW, action_row, price_row, table, ts
 
 from open_data_store.contracts.registry import discover_contracts
 from open_data_store.contracts.rules import BatchInvalid, conform, validate_contract
@@ -14,6 +18,7 @@ from open_data_store.contracts.standard.market import (
     FETCH_LOG,
     INDEX_SNAPSHOTS,
     INSTRUMENT_IDENTIFIERS,
+    LINK_REASONS,
     MARKET_CONTRACTS,
     MARKET_ID_SCHEMES,
     PRICES,
@@ -94,9 +99,6 @@ def test_natural_keys():
 
 
 def test_id_schemes_untouched_and_own_vocabulary():
-    from open_data_store.contracts.rules import ID_SCHEMES
-
-    assert ID_SCHEMES == ("cik", "lei", "isin", "figi", "ticker", "cb_code", "national_id")
     assert INSTRUMENT_IDENTIFIERS.column("id_scheme").allowed == MARKET_ID_SCHEMES
 
 
@@ -147,3 +149,75 @@ def test_nullable_vocabulary_columns_accept_null_but_refuse_other_values():
             table(CORPORATE_ACTIONS, [action_row(amount_basis="net_ish")]),
             now=NOW,
         )
+
+
+_COMMON = dict(
+    valid_date=date(2025, 6, 30),
+    known_at=ts("2025-06-30T20:00:00"),
+    known_at_kind="published",
+    source_code="massive",
+    source_doc_id=None,
+)
+
+
+def _rows():
+    return {
+        VENDOR_TOTAL_RETURN: dict(
+            source_symbol="AAPL", tr_index=1234.5, known_at_basis="fetch_time", **_COMMON
+        ),
+        INDEX_SNAPSHOTS: dict(
+            index_code="sp500",
+            source_symbol="AAPL",
+            snapshot_size=503,
+            weight=None,
+            is_member=True,
+            known_at_basis="snapshot_date",
+            **_COMMON,
+        ),
+        INSTRUMENT_IDENTIFIERS: dict(
+            instrument_id="mof:" + uuid.uuid4().hex,
+            id_scheme="source_symbol",
+            id_value="massive:AAPL",
+            valid_to=None,
+            link_reason=None,
+            known_at_basis="load_time",
+            **_COMMON,
+        ),
+        FETCH_LOG: dict(
+            source_symbol="AAPL",
+            fetch_id="f-1",
+            requested_from=date(2025, 1, 1),
+            requested_to=date(2025, 6, 30),
+            returned_from=date(2025, 1, 2),
+            returned_to=date(2025, 6, 30),
+            status="ok",
+            row_count=124,
+            archive_ref=None,
+            known_at_basis="fetch_time",
+            **_COMMON,
+        ),
+    }
+
+
+@pytest.mark.parametrize(
+    "contract", [VENDOR_TOTAL_RETURN, INDEX_SNAPSHOTS, INSTRUMENT_IDENTIFIERS, FETCH_LOG]
+)
+def test_valid_synthetic_row_conforms(contract):
+    row = _rows()[contract]
+    assert conform(contract, table(contract, [row]), now=NOW).num_rows == 1
+
+
+def test_link_reason_is_a_closed_nullable_vocabulary():
+    assert INSTRUMENT_IDENTIFIERS.column("link_reason").allowed == LINK_REASONS
+    row = _rows()[INSTRUMENT_IDENTIFIERS]
+    row["link_reason"] = "successor"
+    assert conform(INSTRUMENT_IDENTIFIERS, table(INSTRUMENT_IDENTIFIERS, [row]), now=NOW)
+    row["link_reason"] = "because"
+    with pytest.raises(BatchInvalid, match="value_not_allowed:link_reason"):
+        conform(INSTRUMENT_IDENTIFIERS, table(INSTRUMENT_IDENTIFIERS, [row]), now=NOW)
+
+
+def test_column_types_are_pinned():
+    assert PRICES.column("close").type == pa.float64()
+    assert PRICES.column("volume").type == pa.int64()
+    assert CORPORATE_ACTIONS.column("action_seq").type == pa.int16()

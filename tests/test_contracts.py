@@ -297,3 +297,18 @@ def test_filings_refuse_a_missing_form():
 
     with pytest.raises(BatchInvalid):
         conform(FILINGS, table(FILINGS, [filing_row(form=None)]), now=NOW)
+
+
+def test_conform_null_passes_a_nullable_vocabulary_column_and_bad_value_is_refused():
+    from conftest import NOW, filing_row, table
+
+    from open_data_store.contracts.rules import BatchInvalid, conform
+
+    c = dataclasses.replace(
+        FILINGS,
+        columns=(*FILINGS.columns, Column("flag", pa.string(), allowed=("a", "b"))),
+    )
+    assert conform(c, table(c, [filing_row(flag=None)]), now=NOW).num_rows == 1
+    assert conform(c, table(c, [filing_row(flag="a")]), now=NOW).num_rows == 1
+    with pytest.raises(BatchInvalid, match="value_not_allowed:flag:1"):
+        conform(c, table(c, [filing_row(flag="z")]), now=NOW)
