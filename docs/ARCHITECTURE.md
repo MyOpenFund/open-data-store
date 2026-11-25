@@ -92,8 +92,9 @@ instead of the latest per key, for a recipe that compares a value with the one i
 * Common rules (in `contracts/rules.py`): bitemporal columns, provenance (`source_code`,
   `source_doc_id`), natural key containing `valid_date` and `source_code` and never `known_at`,
   mandatory licence and owner, identifier schemes, reserved columns `entity_id` / `batch_id`.
-* Standard contracts ship with the library (`fundamentals`, `entity_observations`,
-  `filing_statements`, `filings`); producers declare
+* Standard contracts ship with the library, ten in all (`fundamentals`, `entity_observations`,
+  `filing_statements`, `filings`, and the six market contracts `prices`, `corporate_actions`,
+  `vendor_total_return`, `index_snapshots`, `instrument_identifiers`, `fetch_log`); producers declare
   their own through the `open_data_store.contracts` entry-point group (the spec's working name was
   `myopenfund.datasets`).
 * `fundamentals` (3 is the major, 3.1.0 the current version) keeps facts as filed, keyed by tag:
@@ -145,6 +146,14 @@ instead of the latest per key, for a recipe that compares a value with the one i
   standard contracts plus pure recipes over Arrow tables in `open_data_store.market`; the market
   identifier schemes are a vocabulary of their own, so the shared one is untouched. Restricted
   sources are denied by default. See the "Market data" section of the README.
+* **Licence gate** (`sources.filter_sources`). It is enforced where data leaves the library for a
+  consumer: `market.store.load_market_inputs` and the serving layers (the MCP). `Store.read_asof`
+  is **not** gated: it returns every source, and a caller that serves its rows must filter them
+  itself, before any column projection (the filter needs `source_code`, and `id_scheme` /
+  `id_value` for identifier mappings). Market data is read in strict mode: a `source_code`
+  missing from the source registry is denied (fail closed), and a `source_symbol` identifier row
+  is denied when the source named by its `id_value` prefix is denied. Other callers keep the
+  default mode, where an unregistered code is open.
 * A contract marks itself as an identity dataset with `resolves_entities=True`; it is published
   before other data in each run.
 

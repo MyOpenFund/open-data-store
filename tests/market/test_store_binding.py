@@ -22,12 +22,22 @@ from open_data_store.sources import SourceInfo
 LATE = ts("2026-06-01T00:00:00")
 
 
+def _open(code):
+    return SourceInfo(code, "open terms", "https://example.test/o", code, "open")
+
+
+# Market data is read in strict mode: every source of the fixtures must be registered.
+OPEN_SOURCES = [_open(c) for c in ("massive", "srcx", "mapper")]
+
+
 @pytest.fixture
 def restricted_registry(monkeypatch):
     info = SourceInfo("vendr", "vendor terms", "https://example.test/t", "Vendor", "restricted")
     real = sources.discover_sources
     monkeypatch.setattr(
-        sources, "discover_sources", lambda extra=None: real([*(extra or []), info])
+        sources,
+        "discover_sources",
+        lambda extra=None: real([*(extra or []), *OPEN_SOURCES, info]),
     )
 
 
@@ -146,3 +156,41 @@ def test_restricted_sources_are_filtered_in_snapshots_and_identifiers(
     assert got.identifiers.column("source_code").to_pylist() == ["mapper"]
     assert allowed.snapshots.num_rows == 2
     assert allowed.identifiers.num_rows == 2
+
+
+def test_unregistered_sources_are_denied(approved, restricted_registry):
+    approve_contract(approved, PRICES, "test")
+    land(approved, PRICES, [price_row(), price_row(source_code="ghost", source_symbol="GHO")])
+    assert publish_pending(approved, now=NOW).exit_code == 0
+    with Store.open(approved) as s:
+        got = load_market_inputs(s, as_of=LATE)
+        allowed = load_market_inputs(s, as_of=LATE, allowed_restricted=frozenset({"ghost"}))
+    assert got.prices.column("source_code").to_pylist() == ["massive"]
+    assert allowed.prices.column("source_code").to_pylist() == ["massive"]
+
+
+def test_identifier_rows_naming_a_restricted_source_are_filtered(approved, restricted_registry):
+    approve_contract(approved, INSTRUMENT_IDENTIFIERS, "test")
+    # Both rows are stamped by the open mapper; the second maps a symbol of the restricted vendor.
+    land(
+        approved,
+        INSTRUMENT_IDENTIFIERS,
+        [identifier_row(), identifier_row(id_value="vendr:VND")],
+    )
+    assert publish_pending(approved, now=NOW).exit_code == 0
+    with Store.open(approved) as s:
+        got = load_market_inputs(s, as_of=LATE)
+        allowed = load_market_inputs(s, as_of=LATE, allowed_restricted=frozenset({"vendr"}))
+    assert got.identifiers.column("id_value").to_pylist() == ["srcx:TOKA"]
+    assert sorted(allowed.identifiers.column("id_value").to_pylist()) == ["srcx:TOKA", "vendr:VND"]
+
+
+def test_each_contract_is_read_at_its_own_major(approved, restricted_registry):
+    approve_contract(approved, PRICES, "test")
+    land(approved, PRICES, [price_row()])
+    assert publish_pending(approved, now=NOW).exit_code == 0
+    # An approved, unpublished later major must not hide the published v1 rows.
+    approve_contract(approved, dataclasses.replace(PRICES, version="2.0.0"), "test")
+    with Store.open(approved) as s:
+        got = load_market_inputs(s, as_of=LATE)
+    assert got.prices.column("source_code").to_pylist() == ["massive"]

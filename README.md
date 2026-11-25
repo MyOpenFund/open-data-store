@@ -95,8 +95,13 @@ fetched, with its status). Approve them on a store before producers publish.
 
 **Source registry.** Sources are declared through the `open_data_store.sources` entry-point group
 (`SourceInfo`: licence, terms URL, attribution, `access` open or restricted, and the flags
-`no_public_display` and `no_ml_training`). Restricted sources are denied by default to every served
-channel; a `source_code` that is not registered is open.
+`no_public_display` and `no_ml_training`; `code` is lowercase, `[a-z][a-z0-9_]{0,62}`).
+Restricted sources are denied by default to every served channel. The gate
+(`sources.filter_sources`) is enforced by `load_market_inputs` and by the serving layers (the
+MCP); `Store.read_asof` is **not** gated, so a caller that serves its rows filters them first,
+before any column projection. Market data is read in strict mode: a `source_code` missing from
+the registry is denied, and a `source_symbol` identifier row is denied when the source of its
+`id_value` prefix is denied. Outside strict mode a `source_code` that is not registered is open.
 
 **Recipes** are pure functions over Arrow tables (extra `pip install "myopenfund-open-data-store[recipes]"`).
 Signatures, from the submodules `market.membership`, `market.returns`, `market.coverage`,
@@ -116,9 +121,10 @@ load_market_inputs(store, *, as_of, allowed_restricted=frozenset(),
                    identifiers_as_of=None)                                   # -> MarketInputs
 ```
 
-`load_market_inputs` (`open_data_store.market.store`) reads prices, actions, snapshots and the
-fetch log as-of, the identifiers latest, drops restricted sources unless allowed and drops
-`entity_id`/`batch_id`. `identifiers_as_of` (default now, UTC) pins the identifier read to
+`load_market_inputs` (`open_data_store.market.store`) reads each contract at its own major
+(`prices_v1`, ...), prices, actions, snapshots and the fetch log as-of and the identifiers latest,
+applies the strict licence gate (restricted sources dropped unless allowed, unregistered sources
+always dropped) and drops `entity_id`/`batch_id`. `identifiers_as_of` (default now, UTC) pins the identifier read to
 reproduce a load. A dataset approved but not published yet, or not approved, gives an empty table
 with its contract schema. Only the latest vintage knowable at `as_of` is kept per key: call the
 recipes with the same `as_of` as the load.
