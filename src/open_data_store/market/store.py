@@ -46,24 +46,40 @@ def _read(
     restricted: frozenset[str],
 ) -> pa.Table:
     try:
-        table = store.read_asof(contract.name, as_of)
+        published = store.is_published(contract.name)
     except UnknownDataset:
+        published = False
+    if not published:
         return contract.schema.empty_table()
+    table = store.read_asof(contract.name, as_of)
     table = table.drop_columns([c for c in _PUBLISHER_COLUMNS if c in table.column_names])
+    table = table.select(contract.schema.names).cast(contract.schema)
     return filter_sources(table, allowed_restricted, restricted)
 
 
 def load_market_inputs(
-    store: Store, *, as_of: datetime, allowed_restricted: frozenset[str] = frozenset()
+    store: Store,
+    *,
+    as_of: datetime,
+    allowed_restricted: frozenset[str] = frozenset(),
+    identifiers_as_of: datetime | None = None,
 ) -> MarketInputs:
     """Read the market inputs of ``store`` as known at ``as_of`` (tz-aware).
 
-    Prices, actions, snapshots and the fetch log are read as-of; identifiers are read latest
-    (``now``, UTC). Rows of restricted sources are dropped unless their code is in
-    ``allowed_restricted``. ``entity_id`` and ``batch_id`` are dropped, so every table follows its
-    contract schema."""
+    Prices, actions, snapshots and the fetch log are read as-of; identifiers are read latest:
+    at ``identifiers_as_of`` (tz-aware), default now (UTC); pass it to reproduce a read. Rows of
+    restricted sources are dropped unless their code is in ``allowed_restricted``.
+    ``entity_id`` and ``batch_id`` are dropped, so every table follows its contract schema
+    (empty and non-empty tables have the same schema; a dataset approved but not
+    yet published, or not approved, gives an empty table).
+
+    Only the latest vintage knowable at ``as_of`` is kept per key, so call the recipes with the same
+    ``as_of`` as this load."""
+    for name, value in (("as_of", as_of), ("identifiers_as_of", identifiers_as_of)):
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError(f"{name} must be a timezone-aware datetime")
     restricted = restricted_codes()
-    now = datetime.now(UTC)
+    now = identifiers_as_of or datetime.now(UTC)
     return MarketInputs(
         prices=_read(store, PRICES, as_of, allowed_restricted, restricted),
         actions=_read(store, CORPORATE_ACTIONS, as_of, allowed_restricted, restricted),

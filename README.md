@@ -99,7 +99,8 @@ fetched, with its status). Approve them on a store before producers publish.
 channel; a `source_code` that is not registered is open.
 
 **Recipes** are pure functions over Arrow tables (extra `pip install "myopenfund-open-data-store[recipes]"`).
-Signatures, from `open_data_store.market`:
+Signatures, from the submodules `market.membership`, `market.returns`, `market.coverage`,
+`market.asof` (`asof`, `latest`, `sessions`) and `market.store`:
 
 ```python
 membership_intervals(snapshots, identifiers, *, index_code, as_of, staleness_days=45, precedence=())
@@ -111,12 +112,16 @@ coverage(intervals, prices_resolved, sessions, fetch_coverage=None, *,
          max_missing_share=0.02, min_delisting_gap_sessions=5)               # -> CoverageResult
 delisting_exits(intervals, prices_resolved, sessions, *, rule="last_close", fixed_return=None,
                 post_prices=None, fetch_coverage=None, min_delisting_gap_sessions=5)
-load_market_inputs(store, *, as_of, allowed_restricted=frozenset())          # -> MarketInputs
+load_market_inputs(store, *, as_of, allowed_restricted=frozenset(),
+                   identifiers_as_of=None)                                   # -> MarketInputs
 ```
 
 `load_market_inputs` (`open_data_store.market.store`) reads prices, actions, snapshots and the
 fetch log as-of, the identifiers latest, drops restricted sources unless allowed and drops
-`entity_id`/`batch_id`. A dataset not published yet gives an empty table with its schema.
+`entity_id`/`batch_id`. `identifiers_as_of` (default now, UTC) pins the identifier read to
+reproduce a load. A dataset approved but not published yet, or not approved, gives an empty table
+with its contract schema. Only the latest vintage knowable at `as_of` is kept per key: call the
+recipes with the same `as_of` as the load.
 
 Coverage reasons: `ok`, `price_invalid`, `not_fetched`, `unmapped`, `source_has_no_data`,
 `recycled_at_source`, `delisted`, `session_not_published`. Total-return flags: `currency_mismatch`,
