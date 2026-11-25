@@ -3,7 +3,8 @@
 ``resolve_prices`` and ``resolve_actions`` read their table as-of (``known_at <= as_of`` and
 ``valid_date <= as_of``) and map each provider series to an instrument on the row's date through
 the ``source_symbol`` identifiers, read latest (see ``_mapping``). Unmapped rows are dropped (the
-coverage recipe reports them). Per (instrument, date) the first source of ``precedence`` that has
+coverage recipe reports them). Outputs carry ``instrument_id`` and ``source_code`` (provenance),
+never a provider symbol. Per (instrument, date) the first source of ``precedence`` that has
 a row wins; sources absent from a non-empty ``precedence`` are ignored. With an empty
 ``precedence``, two series for one (instrument, date) raise ``ValueError``; so do two series of
 the winning source (two symbols of one source mapped to one instrument on one date). Those are
@@ -92,7 +93,6 @@ RESOLVED_PRICES_SCHEMA = pa.schema(
         ("volume", pa.int64()),
         ("currency", pa.string()),
         ("source_code", pa.string()),
-        ("source_symbol", pa.string()),
     ]
 )
 RESOLVED_ACTIONS_SCHEMA = pa.schema(
@@ -107,9 +107,7 @@ RESOLVED_ACTIONS_SCHEMA = pa.schema(
         ("per_share_basis", pa.string()),
         ("ratio_old", pa.float64()),
         ("ratio_new", pa.float64()),
-        ("spinoff_symbol", pa.string()),
         ("source_code", pa.string()),
-        ("source_symbol", pa.string()),
     ]
 )
 TOTAL_RETURN_SCHEMA = pa.schema(
@@ -224,7 +222,7 @@ def resolve_prices(
     ``prices`` follows ``PRICES``, ``identifiers`` follows ``INSTRUMENT_IDENTIFIERS``. Returns
     ``RESOLVED_PRICES_SCHEMA`` rows sorted by (instrument_id, session_date). See the module
     docstring for mapping and precedence."""
-    columns = ["valid_date", "close", "volume", "currency", "source_code", "source_symbol"]
+    columns = ["valid_date", "close", "volume", "currency", "source_code"]
     rows, instruments = _resolve(
         prices, identifiers, PRICES.natural_key, as_of, precedence, columns
     )

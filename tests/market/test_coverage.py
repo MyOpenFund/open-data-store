@@ -65,7 +65,6 @@ def _prices(*rows):
             "volume": [100] * len(rows),
             "currency": ["USD"] * len(rows),
             "source_code": ["srcx"] * len(rows),
-            "source_symbol": ["TOK"] * len(rows),
         },
         schema=RESOLVED_PRICES_SCHEMA,
     )

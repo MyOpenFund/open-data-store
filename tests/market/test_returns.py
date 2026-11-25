@@ -165,7 +165,6 @@ def test_precedence_picks_first_source():
         "volume",
         "currency",
         "source_code",
-        "source_symbol",
     ]
     assert out.to_pylist() == [
         dict(
@@ -175,7 +174,6 @@ def test_precedence_picks_first_source():
             volume=1_000_000,
             currency="USD",
             source_code="srcb",
-            source_symbol="TOKA",
         )
     ]
     out = resolve_prices(prices, ids, as_of=AS_OF, precedence=("srca", "srcb"))
@@ -523,7 +521,6 @@ def test_duplicate_price_rows_raise_listing_keys():
             "volume": pa.array([None] * 4, pa.int64()),
             "currency": ["USD"] * 4,
             "source_code": ["srcx"] * 4,
-            "source_symbol": ["TOKA"] * 4,
         }
     )
     ra = resolve_actions(_actions(), IDS, as_of=AS_OF, precedence=())
@@ -655,3 +652,29 @@ def test_old_share_dividend_without_split_used_as_is():
     prices = _prices((date(2020, 3, 2), 100.0), (date(2020, 3, 3), 99.0))
     actions = _actions(_cash(date(2020, 3, 3), 1.0, per_share_basis="old_share"))
     assert _rows(_tr(prices, actions))[-1] == (date(2020, 3, 3), 1.0, None)
+
+
+def test_resolved_outputs_carry_instrument_ids_only():
+    """As-of outputs name instruments, never provider symbols (source_code stays: provenance)."""
+    rp = resolve_prices(_prices((date(2020, 3, 2), 100.0)), IDS, as_of=AS_OF, precedence=())
+    acts = _actions(
+        dict(valid_date=date(2020, 3, 3), action_type="spin_off", spinoff_symbol="TOKS")
+    )
+    ra = resolve_actions(acts, IDS, as_of=AS_OF, precedence=())
+    for out in (rp, ra):
+        assert "source_symbol" not in out.column_names
+        assert "spinoff_symbol" not in out.column_names
+        assert "source_code" in out.column_names
+    assert ra.column_names == [
+        "instrument_id",
+        "ex_date",
+        "action_type",
+        "action_seq",
+        "amount",
+        "currency",
+        "amount_basis",
+        "per_share_basis",
+        "ratio_old",
+        "ratio_new",
+        "source_code",
+    ]

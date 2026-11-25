@@ -129,6 +129,9 @@ reproduce a load. A dataset approved but not published yet, or not approved, giv
 with its contract schema. Only the latest vintage knowable at `as_of` is kept per key: call the
 recipes with the same `as_of` as the load.
 
+Recipe outputs name instruments by `instrument_id` only: `resolve_prices` and `resolve_actions`
+keep `source_code` (provenance) but no provider symbol (`source_symbol`, `spinoff_symbol`).
+
 Coverage reasons: `ok`, `price_invalid`, `not_fetched`, `unmapped`, `source_has_no_data`,
 `recycled_at_source`, `delisted`, `session_not_published`. Total-return flags: `currency_mismatch`,
 `currency_change`, `spin_off_unvalued`, `rights_unvalued`, `action_invalid`, `gap`,
