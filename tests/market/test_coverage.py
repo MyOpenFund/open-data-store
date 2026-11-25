@@ -649,7 +649,14 @@ def test_long_tail_gap_is_delisted_with_the_default():
     assert {_reasons(result, M2)[d] for d in DAYS[2:]} == {"delisted"}
 
 
-@pytest.mark.parametrize("value", [0, -1, 2.5, True])
+@pytest.mark.parametrize("value", [np.int64(3), np.int32(1), 5])
+def test_min_delisting_gap_sessions_accepts_integers(value):
+    args = (_intervals((M1, DAYS[0], None)), _prices(*_full(M1)), _sessions())
+    assert coverage(*args, min_delisting_gap_sessions=value).passed is True
+    assert delisting_exits(*args, min_delisting_gap_sessions=value).num_rows == 0
+
+
+@pytest.mark.parametrize("value", [0, -1, 2.5, True, np.bool_(True), np.int64(0), np.float64(3)])
 def test_min_delisting_gap_sessions_refused(value):
     args = (_intervals((M1, DAYS[0], None)), _prices(*_full(M1)), _sessions())
     with pytest.raises(ValueError, match="min_delisting_gap_sessions"):

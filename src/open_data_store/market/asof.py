@@ -15,9 +15,6 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 
-_ROW = "__ods_row__"
-_MAX = "__ods_max_known_at__"
-
 
 def _check_nulls(table: pa.Table, keys: Sequence[str]) -> None:
     for name in (*keys, "known_at"):
@@ -31,9 +28,6 @@ def _latest_per_key(
     """Latest row per key among ``candidates`` (row indices of ``table``; all rows if None)."""
     keys = list(natural_key)
     _check_nulls(table, keys)
-    for reserved in (_ROW, _MAX):  # kept reserved for internal use
-        if reserved in table.column_names:
-            raise ValueError(f"column name {reserved!r} is reserved")
     # Sort only the key columns and known_at of the candidates (payload columns never move),
     # then keep the last row of each key run; the payload is taken once, at the end.
     slim = table.select([*keys, "known_at"])
@@ -98,8 +92,10 @@ def sessions(mic: str, start: date, end: date) -> pa.Table:
 
     The calendar is built on the requested range, not the library's default window, so any
     range the calendar library supports works, including history before its default start
-    (e.g. XNYS before 2006). A range with no session returns an empty table; ``start > end``
-    or a range outside the library's bounds raises ``ValueError``."""
+    (e.g. XNYS before 2006). Reliable range: XNYS yearly session counts were checked from 1990
+    (exchange_calendars 4.13.2); earlier years build but are unverified. A range with no session
+    returns an empty table; ``start > end`` or a range outside the library's bounds raises
+    ``ValueError``."""
     import exchange_calendars as xcals
     from exchange_calendars import errors as xerrors
     from pandas.errors import OutOfBoundsDatetime

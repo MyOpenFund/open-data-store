@@ -78,6 +78,7 @@ Every exit row is ``flagged``; rows are sorted by ``instrument_id``.
 from __future__ import annotations
 
 import math
+import operator
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Literal
@@ -287,9 +288,15 @@ def _check_share(value: float) -> None:
         raise ValueError(f"max_missing_share must be within [0, 1], got {value!r}")
 
 
-def _check_gap(value: int) -> None:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+def _check_gap(value: int) -> int:
+    """Any integral value >= 1 (``operator.index``: numpy integers too); bools are refused."""
+    try:
+        gap = None if isinstance(value, (bool, np.bool_)) else operator.index(value)
+    except TypeError:
+        gap = None
+    if gap is None or gap < 1:
         raise ValueError(f"min_delisting_gap_sessions must be an integer >= 1, got {value!r}")
+    return gap
 
 
 def _check_statuses(fetch_coverage: pa.Table) -> None:
@@ -356,7 +363,7 @@ def _classify(
     fetch_coverage: pa.Table | None,
     min_delisting_gap_sessions: int,
 ) -> _Cells:
-    _check_gap(min_delisting_gap_sessions)
+    min_delisting_gap_sessions = _check_gap(min_delisting_gap_sessions)
     if fetch_coverage is not None:
         _check_statuses(fetch_coverage)
     u = _universe(intervals, sessions)

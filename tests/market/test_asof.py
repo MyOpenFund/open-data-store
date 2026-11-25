@@ -105,11 +105,10 @@ def test_list_payload_column_supported():
     assert out.column("p").to_pylist() == [[1, 2]]
 
 
-def test_reserved_column_name_rejected():
+def test_no_column_name_is_reserved():
     t = _table([("a", date(2024, 5, 1), datetime(2024, 5, 1, tzinfo=UTC), 1)])
-    t = t.append_column("__ods_row__", pa.array([0], pa.int64()))
-    with pytest.raises(ValueError, match="reserved"):
-        latest(t, ["k"])
+    t = t.append_column("__ods_row__", pa.array([7], pa.int64()))
+    assert latest(t, ["k"]).column("__ods_row__").to_pylist() == [7]
 
 
 def test_tie_error_names_key():
