@@ -39,6 +39,6 @@ def test_no_old_name_left():
 
 def test_distribution_cli_and_entry_point_group_renamed():
     project = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))["project"]
-    assert project["name"] == "open-data-store"
+    assert project["name"] == "myopenfund-open-data-store"
     assert project["scripts"] == {"open-data-store": "open_data_store.cli:main"}
     assert list(project["entry-points"]) == ["open_data_store.contracts"]

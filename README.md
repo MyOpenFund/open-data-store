@@ -1,5 +1,7 @@
 # open-data-store
 
+Created and maintained by [Marc Jeulin](https://github.com/jeulinmarc), part of [MyOpenFund](https://github.com/MyOpenFund).
+
 Bitemporal open-data store for MyOpenFund: dataset **contracts**, a light **writer** for producers,
 a **publisher** (the only writer to the lake) and a **reader** for analyses, the MCP and strategies.
 Facts are DuckLake tables (Parquet + a Postgres catalogue), read through DuckDB. Every fact carries
@@ -8,15 +10,30 @@ Facts are DuckLake tables (Parquet + a Postgres catalogue), read through DuckDB.
 > This library is a tool. It manages nobody's money and gives no investment advice.
 
 Renamed on 2026-11-22 (package, import, command and environment variables): see
-[docs/MIGRATION.md](docs/MIGRATION.md).
+[docs/MIGRATION.md](https://github.com/MyOpenFund/open-data-store/blob/main/docs/MIGRATION.md).
 
 ## Install
 
 ```
-pip install "open-data-store[writer]"     # producers: pyarrow only
-pip install "open-data-store[publisher]"  # store operator: DuckDB + DuckLake
-pip install "open-data-store[reader]"     # analyses, MCP, strategies
+pip install "myopenfund-open-data-store[writer]"     # producers: pyarrow only
+pip install "myopenfund-open-data-store[publisher]"  # store operator: DuckDB + DuckLake
+pip install "myopenfund-open-data-store[reader]"     # analyses, MCP, strategies
 ```
+
+If this environment installed the old distribution (`open-data-store`, from a git URL), run
+`pip uninstall -y open-data-store` before installing `myopenfund-open-data-store`: both own the same import package.
+
+To try the latest `main` before a release (dependencies still come from PyPI):
+
+```
+pip install "myopenfund-open-data-store[reader] @ git+https://github.com/MyOpenFund/open-data-store"
+```
+
+**Working across repos**
+
+Clone the repos side by side and install this package editable over the PyPI version in the
+consumer's environment: `pip install -e ../open-data-store`. A consumer change that needs an
+unreleased version waits for this package's release before the consumer's PR merges.
 
 ## Configuration
 
@@ -96,7 +113,7 @@ quarantines failures in `landing/_quarantine/` with a `reason.json`, publishes t
 `reports/publisher/`. A batch that hits an infrastructure error (listed under `errors`, exit 1)
 stays in `landing/` for the next run, and so do the fact batches behind a failed identity batch,
 instead of being quarantined as `unknown_entity`. Those deferrals are `errors` entries too (no
-separate field): their `error` text starts with `deferred:`. Design, security model and gotchas: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+separate field): their `error` text starts with `deferred:`. Design, security model and gotchas: [docs/ARCHITECTURE.md](https://github.com/MyOpenFund/open-data-store/blob/main/docs/ARCHITECTURE.md).
 
 Producers may re-emit full history: rows already published with the same values (compared
 exactly, so re-emit bit-identical floats) are skipped and counted (`skipped_rows` in the report,

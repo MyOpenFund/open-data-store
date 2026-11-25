@@ -40,7 +40,7 @@ library `DATA_ROOT`, `CATALOG`, `DATA_INLINING_ROW_LIMIT`, `KNOWN_AT_FUTURE_TOLE
 ## Upgrading
 
 1. **Uninstall the old distribution first**, in every environment that had it:
-   `pip uninstall -y my-open-data`, then install `open-data-store[...]`. pip sees two different
+   `pip uninstall -y my-open-data`, then install `myopenfund-open-data-store[...]` (see "PyPI distribution name" below). pip sees two different
    distributions; the old one would otherwise stay installed and importable.
 2. Replace imports `myopendata` → `open_data_store`, the command `myopendata` →
    `open-data-store`, and the `MYOPENDATA_` prefix → `OPEN_DATA_STORE_` in environments, `.env`
@@ -66,3 +66,16 @@ library `DATA_ROOT`, `CATALOG`, `DATA_INLINING_ROW_LIMIT`, `KNOWN_AT_FUTURE_TOLE
    4. Start the new stack with an empty `landing/`: `contracts list` shows the same fingerprints,
       `publish` finds nothing to do, and a `lake_reader` read gives the same row counts as before.
    5. Only then delete the old stack, and its `pgdata` volume once you no longer need a way back.
+
+## PyPI distribution name
+
+From 0.1.0 the package is published on PyPI as `myopenfund-open-data-store` (the `myopenfund-`
+prefix groups the MyOpenFund packages). Only the distribution name changes: the import name
+(`open_data_store`), the command (`open-data-store`) and the entry-point group stay.
+
+- In every environment that installed the earlier `open-data-store` distribution (from a git URL),
+  run `pip uninstall -y open-data-store` first, then `pip install "myopenfund-open-data-store[reader]"`:
+  both distributions own the same import package.
+- The NAS stack (`deploy/nas/compose.yaml`) installs `myopenfund-open-data-store[publisher]` from the
+  same git URL and `OPEN_DATA_STORE_REF` as before; pip refuses a direct reference whose name
+  differs from the built metadata, so use a ref at or after this rename.

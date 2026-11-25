@@ -3,18 +3,19 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-name = "open-data-store"
-version = "0.1.0"
+name = "myopenfund-open-data-store"
+dynamic = ["version"]
 description = "Bitemporal open-data store for MyOpenFund: contracts, writer, publisher, reader."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
-keywords = ["open-data", "bitemporal", "duckdb", "ducklake", "parquet", "finance"]
+authors = [{ name = "Marc Jeulin" }]
+maintainers = [{ name = "Marc Jeulin" }]
+keywords = ["myopenfund", "open-data", "bitemporal", "duckdb", "ducklake", "parquet", "finance"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Financial and Insurance Industry",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -27,17 +28,22 @@ dependencies = ["pyarrow>=17"]
 writer = []
 publisher = ["duckdb>=2.0,<3", "pytz>=2024.1"]
 reader = ["duckdb>=2.0,<3", "pytz>=2024.1", "openpyxl>=3.1"]
-dev = ["duckdb>=2.0,<3", "pytz>=2024.1", "openpyxl>=3.1", "pytest>=8", "ruff==0.17.3", "build>=1.2", "twine>=5"]
+dev = ["duckdb>=2.0,<3", "pytz>=2024.1", "openpyxl>=3.1", "pytest>=8", "ruff==0.17.3", "build>=1.2", "twine>=5", "pyyaml>=6"]
 
 [project.urls]
 Homepage = "https://github.com/MyOpenFund/open-data-store"
+Source = "https://github.com/MyOpenFund/open-data-store"
 Issues = "https://github.com/MyOpenFund/open-data-store/issues"
+Organization = "https://github.com/MyOpenFund"
 
 [project.scripts]
 open-data-store = "open_data_store.cli:main"
 
 [project.entry-points."open_data_store.contracts"]
 standard = "open_data_store.contracts.standard:contracts"
+
+[tool.hatch.version]
+path = "src/open_data_store/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/open_data_store"]
