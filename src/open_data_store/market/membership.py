@@ -76,6 +76,7 @@ UNRESOLVED_SCHEMA = pa.schema(
         ("source_symbol", pa.string()),
         ("first_seen", pa.date32()),
         ("last_seen", pa.date32()),
+        ("valid_to", pa.date32()),
     ]
 )
 
@@ -158,6 +159,14 @@ def _chosen_snapshots(
     return chosen
 
 
+def _snapshot_end(chosen: list[_Snapshot], i: int, cap: timedelta, as_of_date: date) -> date | None:
+    """End (exclusive) of the validity of snapshot ``i``; None while open."""
+    d = chosen[i].valid_date
+    if i + 1 < len(chosen):
+        return min(chosen[i + 1].valid_date, d + cap)
+    return None if (as_of_date - d) <= cap else d + cap
+
+
 def membership_intervals(
     snapshots: pa.Table,
     identifiers: pa.Table,
@@ -186,10 +195,7 @@ def membership_intervals(
     spans: dict[str, list[tuple[date, date | None, str]]] = defaultdict(list)
     for i, snap in enumerate(chosen):
         d = snap.valid_date
-        if i + 1 < len(chosen):
-            end: date | None = min(chosen[i + 1].valid_date, d + cap)
-        else:
-            end = None if (as_of_date - d) <= cap else d + cap
+        end = _snapshot_end(chosen, i, cap, as_of_date)
         for instrument in snap.instruments:
             runs = spans[instrument]
             if runs and runs[-1][1] == d and runs[-1][2] == snap.source_code:
@@ -220,20 +226,28 @@ def unresolved_members(
     *,
     index_code: str,
     as_of: datetime,
+    staleness_days: int = DEFAULT_STALENESS_DAYS,
     precedence: Sequence[str] = (),
 ) -> pa.Table:
     """Members of the chosen snapshots whose symbol maps to no instrument on the snapshot date.
 
-    Same snapshot selection as ``membership_intervals``. Returns ``UNRESOLVED_SCHEMA`` rows: the
-    first and last snapshot dates where the symbol was an unresolved member, sorted by
-    (source_code, source_symbol)."""
-    _validate(as_of, DEFAULT_STALENESS_DAYS, precedence)
-    seen: dict[tuple[str, str], tuple[date, date]] = {}
-    for snap in _chosen_snapshots(snapshots, identifiers, index_code, as_of, precedence):
+    Same snapshot selection and parameters as ``membership_intervals``. Returns
+    ``UNRESOLVED_SCHEMA`` rows sorted by (source_code, source_symbol): the first and last snapshot
+    dates where the symbol was an unresolved member, and ``valid_to``, the end (exclusive) of the
+    last one's validity under the interval rules (next snapshot date, capped at
+    ``staleness_days``; null while open). ``coverage(..., unresolved=...)`` counts the symbol as
+    an unmapped member on every session of ``[first_seen, valid_to)``."""
+    days = _validate(as_of, staleness_days, precedence)
+    cap = timedelta(days=days)
+    as_of_date = as_of.astimezone(UTC).date()
+    chosen = _chosen_snapshots(snapshots, identifiers, index_code, as_of, precedence)
+    seen: dict[tuple[str, str], tuple[date, date, date | None]] = {}
+    for i, snap in enumerate(chosen):
+        end = _snapshot_end(chosen, i, cap, as_of_date)
         for sym in snap.unresolved:
             key = (snap.source_code, sym)
             first = seen[key][0] if key in seen else snap.valid_date
-            seen[key] = (first, snap.valid_date)
+            seen[key] = (first, snap.valid_date, end)
     keys = sorted(seen)
     return pa.table(
         {
@@ -241,6 +255,7 @@ def unresolved_members(
             "source_symbol": pa.array([k[1] for k in keys], pa.string()),
             "first_seen": pa.array([seen[k][0] for k in keys], pa.date32()),
             "last_seen": pa.array([seen[k][1] for k in keys], pa.date32()),
+            "valid_to": pa.array([seen[k][2] for k in keys], pa.date32()),
         },
         schema=UNRESOLVED_SCHEMA,
     )

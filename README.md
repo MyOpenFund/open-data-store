@@ -109,11 +109,11 @@ Signatures, from the submodules `market.membership`, `market.returns`, `market.c
 
 ```python
 membership_intervals(snapshots, identifiers, *, index_code, as_of, staleness_days=45, precedence=())
-unresolved_members(snapshots, identifiers, *, index_code, as_of, precedence=())
+unresolved_members(snapshots, identifiers, *, index_code, as_of, staleness_days=45, precedence=())
 resolve_prices(prices, identifiers, *, as_of, precedence)
 resolve_actions(actions, identifiers, *, as_of, precedence)
 total_return(prices, actions, sessions, *, reinvest_at="ex_date_close")      # resolved inputs
-coverage(intervals, prices_resolved, sessions, fetch_coverage=None, *,
+coverage(intervals, prices_resolved, sessions, fetch_coverage=None, *, unresolved=None,
          max_missing_share=0.02, min_delisting_gap_sessions=5)               # -> CoverageResult
 delisting_exits(intervals, prices_resolved, sessions, *, rule="last_close", fixed_return=None,
                 post_prices=None, fetch_coverage=None, min_delisting_gap_sessions=5)
@@ -139,6 +139,10 @@ Coverage reasons: `ok`, `price_invalid`, `not_fetched`, `unmapped`, `source_has_
 
 Caller contracts:
 
+- **Pass `unresolved=unresolved_members(...)` to `coverage`.** Without it, coverage ignores
+  unmapped index members and can pass on a universe with holes. With it, each unresolved symbol
+  counts as a missing member (`per_session.unmapped`) on every session of
+  `[first_seen, valid_to)`.
 - `fetch_coverage` callers must drop superseded `error`/`partial` fetch rows: a failed row vetoes
   a delisting whatever its order.
 - A restated snapshot that omits a symbol leaves the old row visible: producers emit

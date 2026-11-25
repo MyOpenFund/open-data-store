@@ -44,11 +44,18 @@ Reason per cell, first match wins:
 ``session_not_published`` is checked before the delisting step (controller ruling 3 lists them
 the other way): otherwise a feed one day behind for everyone would read as delistings.
 ``unmapped`` and ``recycled_at_source`` stay in ``REASONS`` for producers that see source
-symbols; this function never emits them (an unmapped symbol never reaches an instrument cell: see
-``membership.unresolved_members``).
+symbols; ``per_member`` never carries them (it is keyed by instrument, and an unmapped symbol has
+none).
 
-Per session: ``members`` = expected cells, ``delisted`` = cells ``delisted``, ``missing`` = cells
-neither ``ok`` nor ``delisted``, ``missing_share`` = missing / members (0.0 with no member),
+Unmapped members: ``unresolved`` (optional) is a ``membership.unresolved_members`` output of the
+same index and ``as_of``. Each of its symbols is an unmapped member on every session of
+``[first_seen, valid_to)`` (``valid_to`` null = open), counted per session in ``unmapped``, in
+``members`` and in ``missing``. **Without ``unresolved``, unmapped members are ignored**: a
+universe whose members are mostly unmapped can pass.
+
+Per session: ``members`` = expected cells + ``unmapped``, ``unmapped`` = unmapped members,
+``delisted`` = cells ``delisted``, ``missing`` = cells neither ``ok`` nor ``delisted``, plus
+``unmapped``, ``missing_share`` = missing / members (0.0 with no member),
 ``over_threshold`` = missing_share > ``max_missing_share``. ``passed`` = no session over it.
 ``max_missing_share`` defaults to ``DEFAULT_MAX_MISSING_SHARE`` (0.02), a placeholder to re-set
 from measurements on real data (spec §11, review B5).
@@ -133,6 +140,7 @@ COVERAGE_PER_SESSION_SCHEMA = pa.schema(
     [
         ("session_date", pa.date32()),
         ("members", pa.int64()),
+        ("unmapped", pa.int64()),
         ("delisted", pa.int64()),
         ("missing", pa.int64()),
         ("missing_share", pa.float64()),
@@ -429,6 +437,7 @@ def coverage(
     sessions: pa.Table,
     fetch_coverage: pa.Table | None = None,
     *,
+    unresolved: pa.Table | None = None,
     max_missing_share: float = DEFAULT_MAX_MISSING_SHARE,
     min_delisting_gap_sessions: int = DEFAULT_MIN_DELISTING_GAP_SESSIONS,
 ) -> CoverageResult:
@@ -436,13 +445,20 @@ def coverage(
 
     ``per_member`` follows ``COVERAGE_PER_MEMBER_SCHEMA`` (every expected cell, ``ok`` included,
     sorted by instrument_id, session_date); ``per_session`` follows
-    ``COVERAGE_PER_SESSION_SCHEMA`` (every session of ``sessions``, sorted). See the module
-    docstring for the rules."""
+    ``COVERAGE_PER_SESSION_SCHEMA`` (every session of ``sessions``, sorted). ``unresolved`` is an
+    ``unresolved_members`` output (same index, ``as_of`` and parameters as ``intervals``); without
+    it, unmapped members are ignored and coverage can pass on a universe with holes. See the
+    module docstring for the rules."""
     _check_share(max_missing_share)
     c = _classify(intervals, prices_resolved, sessions, fetch_coverage, min_delisting_gap_sessions)
     n_sessions = c.u.session_days.size
     sidx, reason = c.sidx, c.reason
-    members = np.bincount(sidx, minlength=n_sessions)
+    unmapped = (
+        _unmapped(unresolved, c.u.session_days)
+        if unresolved is not None
+        else np.zeros(n_sessions, np.int64)
+    )
+    members = np.bincount(sidx, minlength=n_sessions) + unmapped
     delisted = np.bincount(sidx, weights=reason == _CODE["delisted"], minlength=n_sessions)
     missing = members - np.bincount(
         sidx, weights=(reason == _CODE["ok"]) | (reason == _CODE["delisted"]), minlength=n_sessions
@@ -452,7 +468,7 @@ def coverage(
     over = share > max_missing_share
     session_dates = pa.array(c.u.session_days.astype(np.int32), pa.int32()).cast(pa.date32())
     per_session = pa.table(
-        [session_dates, members.astype(np.int64), delisted, missing, share, over],
+        [session_dates, members.astype(np.int64), unmapped, delisted, missing, share, over],
         schema=COVERAGE_PER_SESSION_SCHEMA,
     )
     per_member = pa.table(
@@ -464,6 +480,21 @@ def coverage(
         schema=COVERAGE_PER_MEMBER_SCHEMA,
     )
     return CoverageResult(per_member, per_session, not bool(over.any()))
+
+
+def _unmapped(unresolved: pa.Table, session_days: np.ndarray) -> np.ndarray:
+    """Per session: unresolved symbols whose ``[first_seen, valid_to)`` covers it."""
+    _require_no_nulls(unresolved["first_seen"], "unresolved.first_seen")
+    start = _days(unresolved["first_seen"])
+    end_col = unresolved["valid_to"].combine_chunks()
+    end = np.where(end_col.is_null().to_numpy(zero_copy_only=False), _OPEN, _days(end_col))
+    lo = np.searchsorted(session_days, start, "left")
+    hi = np.searchsorted(session_days, end, "left")
+    real = hi > lo
+    diff = np.zeros(session_days.size + 1, np.int64)
+    np.add.at(diff, lo[real], 1)
+    np.add.at(diff, hi[real], -1)
+    return np.cumsum(diff[:-1])
 
 
 def _check_exit_rule(rule: str, fixed_return: float | None, post_prices: pa.Table | None) -> None:

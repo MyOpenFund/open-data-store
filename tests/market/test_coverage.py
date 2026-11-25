@@ -7,7 +7,14 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import pytest
+from conftest import identifier_row, price_row, snapshot_row, table
 
+from open_data_store.contracts.standard.market import (
+    INDEX_SNAPSHOTS,
+    INSTRUMENT_IDENTIFIERS,
+    PRICES,
+)
+from open_data_store.market.asof import sessions
 from open_data_store.market.coverage import (
     COVERAGE_PER_MEMBER_SCHEMA,
     COVERAGE_PER_SESSION_SCHEMA,
@@ -17,8 +24,13 @@ from open_data_store.market.coverage import (
     coverage,
     delisting_exits,
 )
-from open_data_store.market.membership import INTERVALS_SCHEMA
-from open_data_store.market.returns import RESOLVED_PRICES_SCHEMA
+from open_data_store.market.membership import (
+    INTERVALS_SCHEMA,
+    UNRESOLVED_SCHEMA,
+    membership_intervals,
+    unresolved_members,
+)
+from open_data_store.market.returns import RESOLVED_PRICES_SCHEMA, resolve_prices
 
 M1 = "mof:" + "1" * 32
 M2 = "mof:" + "2" * 32
@@ -688,3 +700,103 @@ def _assert_exits_inside_membership(exits, intervals):
             and (s["valid_to"] is None or row["exit_date"] < s["valid_to"])
             for s in spans
         ), row
+
+
+# --- unmapped members (unresolved_members) ---------------------------------------------------
+
+
+def _unresolved(*rows):
+    """rows: (source_symbol, first_seen, last_seen, valid_to)."""
+    return pa.table(
+        {
+            "source_code": ["srcx"] * len(rows),
+            "source_symbol": [r[0] for r in rows],
+            "first_seen": [r[1] for r in rows],
+            "last_seen": [r[2] for r in rows],
+            "valid_to": [r[3] for r in rows],
+        },
+        schema=UNRESOLVED_SCHEMA,
+    )
+
+
+def test_unmapped_members_count_as_missing():
+    intervals = _intervals((M1, DAYS[0], None))
+    prices = _prices(*_full(M1))
+    # TOKQ: unresolved on DAYS[2]..DAYS[5] (valid_to exclusive); TOKR open from DAYS[8].
+    un = _unresolved(
+        ("TOKQ", DAYS[2], DAYS[2], DAYS[6]),
+        ("TOKR", DAYS[8], DAYS[8], None),
+    )
+    result = coverage(intervals, prices, _sessions(), unresolved=un, max_missing_share=0.4)
+    rows = result.per_session.to_pylist()
+    assert [r["unmapped"] for r in rows] == [0, 0, 1, 1, 1, 1, 0, 0, 1, 1]
+    assert [r["members"] for r in rows] == [1, 1, 2, 2, 2, 2, 1, 1, 2, 2]
+    assert [r["missing"] for r in rows] == [r["unmapped"] for r in rows]
+    assert _session(result, DAYS[3])["missing_share"] == 0.5
+    assert result.passed is False
+    # per_member stays keyed by instrument: no label row for an unmapped symbol.
+    assert set(result.per_member["instrument_id"].to_pylist()) == {M1}
+    assert result.per_member.num_rows == len(DAYS)
+
+
+def test_without_unresolved_unmapped_members_are_ignored():
+    intervals = _intervals((M1, DAYS[0], None))
+    result = coverage(intervals, _prices(*_full(M1)), _sessions(), max_missing_share=0.0)
+    assert result.per_session["unmapped"].to_pylist() == [0] * len(DAYS)
+    assert result.passed is True
+
+
+def test_unmapped_alone_on_a_session_is_fully_missing():
+    un = _unresolved(("TOKQ", DAYS[0], DAYS[0], DAYS[1]))
+    result = coverage(_intervals(), _prices(), _sessions(), unresolved=un)
+    s = _session(result, DAYS[0])
+    assert (s["members"], s["unmapped"], s["missing"], s["missing_share"]) == (1, 1, 1, 1.0)
+    assert _session(result, DAYS[1])["members"] == 0
+
+
+def test_unresolved_null_first_seen_raises():
+    un = _unresolved(("TOKQ", None, None, None))
+    with pytest.raises(ValueError, match="first_seen"):
+        coverage(_intervals(), _prices(), _sessions(), unresolved=un)
+
+
+def test_snapshot_with_unmapped_members_fails_coverage():
+    """Four snapshot members, three unmapped: coverage must not pass at a 0.0 threshold."""
+    sess = sessions("XNYS", date(2025, 6, 2), date(2025, 6, 13))
+    snaps = table(
+        INDEX_SNAPSHOTS,
+        [
+            snapshot_row(
+                valid_date=date(2025, 5, 31),
+                known_at=datetime(2025, 5, 31, 23, tzinfo=UTC),
+                source_symbol=s,
+                snapshot_size=4,
+            )
+            for s in ("TOKA", "DEAD1", "DEAD2", "DEAD3")
+        ],
+    )
+    ids = table(INSTRUMENT_IDENTIFIERS, [identifier_row(instrument_id=M1, id_value="srcx:TOKA")])
+    prices = table(
+        PRICES,
+        [
+            price_row(
+                source_code="srcx", source_symbol="TOKA", valid_date=d, known_at=k, close=10.0
+            )
+            for d, k in zip(
+                sess["session_date"].to_pylist(), sess["close_utc"].to_pylist(), strict=True
+            )
+        ],
+    )
+    as_of = datetime(2025, 6, 14, tzinfo=UTC)
+    kw = dict(index_code="idx1", as_of=as_of)
+    intervals = membership_intervals(snaps, ids, **kw)
+    un = unresolved_members(snaps, ids, **kw)
+    assert intervals.num_rows == 1 and un.num_rows == 3
+    rp = resolve_prices(prices, ids, as_of=as_of, precedence=())
+    blind = coverage(intervals, rp, sess, max_missing_share=0.0)
+    assert blind.passed is True  # documented: without `unresolved`, unmapped members are ignored
+    result = coverage(intervals, rp, sess, unresolved=un, max_missing_share=0.0)
+    assert result.passed is False
+    first = result.per_session.to_pylist()[0]
+    assert (first["members"], first["unmapped"], first["missing"]) == (4, 3, 3)
+    assert first["missing_share"] == 0.75

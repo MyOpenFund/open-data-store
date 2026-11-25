@@ -101,6 +101,7 @@ def test_unmapped_reported_not_dropped():
             source_symbol="TOKZ",
             first_seen=date(2020, 1, 31),
             last_seen=date(2020, 1, 31),
+            valid_to=None,
         )
     ]
 
@@ -349,11 +350,12 @@ def test_unresolved_first_last_seen_sorted():
             ("source_symbol", pa.string()),
             ("first_seen", pa.date32()),
             ("last_seen", pa.date32()),
+            ("valid_to", pa.date32()),
         ]
     )
     assert [tuple(r.values()) for r in un.to_pylist()] == [
-        ("srcx", "TOKY", date(2020, 1, 31), date(2020, 1, 31)),
-        ("srcx", "TOKZ", date(2020, 1, 31), date(2020, 3, 31)),
+        ("srcx", "TOKY", date(2020, 1, 31), date(2020, 1, 31), date(2020, 2, 29)),
+        ("srcx", "TOKZ", date(2020, 1, 31), date(2020, 3, 31), None),
     ]
 
 
@@ -448,7 +450,7 @@ def test_preferred_source_unmapped_leaves_universe_hole():
     # No fallback to srcy on 2020-01-31: the instrument is missing that month.
     assert _rows(membership_intervals(snaps, ids, **kw)) == [(M1, date(2020, 2, 29), None, "srcx")]
     assert [tuple(r.values()) for r in unresolved_members(snaps, ids, **kw).to_pylist()] == [
-        ("srcx", "TOKA", date(2020, 1, 31), date(2020, 1, 31))
+        ("srcx", "TOKA", date(2020, 1, 31), date(2020, 1, 31), date(2020, 2, 29))
     ]
 
 
@@ -478,3 +480,24 @@ def test_last_snapshot_staleness_uses_utc_date_of_non_utc_as_of():
     # 2020-03-17 02:00 at UTC+5 is 2020-03-16 21:00 UTC: 45 days, still open.
     east = datetime(2020, 3, 17, 2, tzinfo=timezone(timedelta(hours=5)))
     assert run(east) == [(M1, date(2020, 1, 31), None, "srcx")]
+
+
+def test_unresolved_valid_to_follows_the_interval_rules():
+    """valid_to closes the last unresolved snapshot exactly as membership_intervals would."""
+    snaps = _snaps(
+        (date(2020, 1, 31), "TOKZ"),
+        (date(2020, 1, 31), "TOKA"),
+        (date(2020, 6, 30), "TOKA"),  # gap > staleness after 2020-01-31
+    )
+    ids = _ids(("srcx:TOKA", M1))
+    kw = dict(index_code="idx1", staleness_days=45)
+
+    def valid_to(as_of):
+        un = unresolved_members(snaps, ids, as_of=_at(as_of, 12), **kw)
+        return un.column("valid_to").to_pylist()
+
+    assert valid_to(date(2020, 2, 10)) == [None]  # last snapshot, still fresh
+    assert valid_to(date(2020, 5, 1)) == [date(2020, 3, 16)]  # last snapshot, stale
+    assert valid_to(date(2020, 7, 1)) == [date(2020, 3, 16)]  # gap capped at 45 days
+    iv = membership_intervals(snaps, ids, as_of=_at(date(2020, 7, 1), 12), **kw)
+    assert _rows(iv)[0] == (M1, date(2020, 1, 31), date(2020, 3, 16), "srcx")
