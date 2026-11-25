@@ -29,6 +29,12 @@ class SourceInfo:
     no_public_display: bool = False
     no_ml_training: bool = False
 
+    def __post_init__(self) -> None:
+        if self.access not in ("open", "restricted"):
+            raise ContractError(
+                f"source {self.code!r}: access must be 'open' or 'restricted', got {self.access!r}"
+            )
+
 
 def discover_sources(extra: list[SourceInfo] | None = None) -> dict[str, SourceInfo]:
     """Return {code: SourceInfo} for every installed source.
@@ -63,12 +69,13 @@ def filter_sources(
 ) -> pa.Table:
     """Drop rows whose source_code is restricted and not allowed.
 
-    A table without a source_code column is returned unchanged.
+    A table without a source_code column is returned unchanged. Fail closed: when the column
+    exists, rows with a null source_code are dropped too (contracts make it non-null, so only
+    malformed tables are affected).
     """
     if "source_code" not in table.column_names:
         return table
-    denied = restricted - allowed_restricted
-    if not denied:
-        return table
-    mask = pc.is_in(table.column("source_code"), value_set=pa.array(sorted(denied), pa.string()))
-    return table.filter(pc.invert(pc.fill_null(mask, False)))
+    col = table.column("source_code")
+    denied = pa.array(sorted(restricted - allowed_restricted), pa.string())
+    hit = pc.fill_null(pc.is_in(col, value_set=denied), False)
+    return table.filter(pc.invert(pc.or_(hit, pc.is_null(col))))
