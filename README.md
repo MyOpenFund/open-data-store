@@ -84,6 +84,54 @@ the whole table. Keep one batch per issuer, and do not merge data files
 (`ducklake_merge_adjacent_files`) without measuring: merging issuers into one file defeats the
 pruning.
 
+## Market data
+
+Six standard contracts (v1, all `fact`, partitioned by `source_code`): `prices` (raw OHLCV per
+provider series and session), `corporate_actions` (splits, dividends, spin-offs, as filed),
+`vendor_total_return` (a vendor's own total-return series, for comparison only),
+`index_snapshots` (index membership per snapshot date), `instrument_identifiers` (dated mappings
+of provider symbols and FIGI/ISIN/CIK to an opaque `mof:` instrument id) and `fetch_log` (what was
+fetched, with its status). Approve them on a store before producers publish.
+
+**Source registry.** Sources are declared through the `open_data_store.sources` entry-point group
+(`SourceInfo`: licence, terms URL, attribution, `access` open or restricted, and the flags
+`no_public_display` and `no_ml_training`). Restricted sources are denied by default to every served
+channel; a `source_code` that is not registered is open.
+
+**Recipes** are pure functions over Arrow tables (extra `pip install "myopenfund-open-data-store[recipes]"`).
+Signatures, from `open_data_store.market`:
+
+```python
+membership_intervals(snapshots, identifiers, *, index_code, as_of, staleness_days=45, precedence=())
+unresolved_members(snapshots, identifiers, *, index_code, as_of, precedence=())
+resolve_prices(prices, identifiers, *, as_of, precedence)
+resolve_actions(actions, identifiers, *, as_of, precedence)
+total_return(prices, actions, sessions, *, reinvest_at="ex_date_close")      # resolved inputs
+coverage(intervals, prices_resolved, sessions, fetch_coverage=None, *,
+         max_missing_share=0.02, min_delisting_gap_sessions=5)               # -> CoverageResult
+delisting_exits(intervals, prices_resolved, sessions, *, rule="last_close", fixed_return=None,
+                post_prices=None, fetch_coverage=None, min_delisting_gap_sessions=5)
+load_market_inputs(store, *, as_of, allowed_restricted=frozenset())          # -> MarketInputs
+```
+
+`load_market_inputs` (`open_data_store.market.store`) reads prices, actions, snapshots and the
+fetch log as-of, the identifiers latest, drops restricted sources unless allowed and drops
+`entity_id`/`batch_id`. A dataset not published yet gives an empty table with its schema.
+
+Coverage reasons: `ok`, `price_invalid`, `not_fetched`, `unmapped`, `source_has_no_data`,
+`recycled_at_source`, `delisted`, `session_not_published`. Total-return flags: `currency_mismatch`,
+`currency_change`, `spin_off_unvalued`, `rights_unvalued`, `action_invalid`, `gap`,
+`price_invalid`.
+
+Caller contracts:
+
+- `fetch_coverage` callers must drop superseded `error`/`partial` fetch rows: a failed row vetoes
+  a delisting whatever its order.
+- A restated snapshot that omits a symbol leaves the old row visible: producers emit
+  `is_member = false` on restatement.
+- Adapters must fill the currency of every cash action, or the cash is dropped (flagged
+  `currency_mismatch`).
+
 ## Producers
 
 ```python

@@ -139,7 +139,12 @@ instead of the latest per key, for a recipe that compares a value with the one i
   identity, read `entity_observations` with `read_asof` (an as-of entity reader comes later).
 * The policy is configuration: `OPEN_DATA_STORE_RESOLVING_SCHEMES` and
   `OPEN_DATA_STORE_SINGLE_VALUED_SCHEMES` (comma-separated). Extending the identifier vocabulary
-  itself changes the standard contracts' fingerprint, so it ships as a new major of them.
+  itself changes the standard contracts' fingerprint; appending a scheme is a vocabulary MINOR
+  (see `rules.py`), so it ships as a new minor of them.
+* **Market data** (prices, corporate actions, index snapshots, identifiers, fetch log) is six
+  standard contracts plus pure recipes over Arrow tables in `open_data_store.market`; the market
+  identifier schemes are a vocabulary of their own, so the shared one is untouched. Restricted
+  sources are denied by default. See the "Market data" section of the README.
 * A contract marks itself as an identity dataset with `resolves_entities=True`; it is published
   before other data in each run.
 

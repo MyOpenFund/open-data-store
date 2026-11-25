@@ -53,7 +53,7 @@ def test_name_and_dynamic_version():
 
 
 def test_installed_version_matches_init():
-    assert importlib.metadata.version(DIST) == open_data_store.__version__ == "0.1.0"
+    assert importlib.metadata.version(DIST) == open_data_store.__version__ == "0.2.0"
 
 
 def test_credit():

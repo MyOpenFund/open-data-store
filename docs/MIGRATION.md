@@ -79,3 +79,11 @@ prefix groups the MyOpenFund packages). Only the distribution name changes: the 
 - The NAS stack (`deploy/nas/compose.yaml`) installs `myopenfund-open-data-store[publisher]` from the
   same git URL and `OPEN_DATA_STORE_REF` as before; pip refuses a direct reference whose name
   differs from the built metadata, so use a ref at or after this rename.
+
+## 0.2.0: market data
+
+No migration. Existing contracts, fingerprints, approvals and batches are unchanged. The six new
+market contracts (`prices`, `corporate_actions`, `vendor_total_return`, `index_snapshots`,
+`instrument_identifiers`, `fetch_log`) must be approved on a store before producers publish them
+(`open-data-store contracts list` shows them). The recipes need the new optional extra
+`myopenfund-open-data-store[recipes]`.
