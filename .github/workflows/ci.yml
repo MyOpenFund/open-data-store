@@ -20,7 +20,7 @@ jobs:
     env:
       OPEN_DATA_STORE_TEST_PG: "host=localhost port=5432 user=postgres dbname=postgres"
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
@@ -32,7 +32,7 @@ jobs:
   stack:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: the stack starts from nothing, creates its roles and dumps its catalogue
         run: |
           mkdir -p "$RUNNER_TEMP/stack/data"
