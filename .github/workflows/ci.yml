@@ -21,7 +21,7 @@ jobs:
       OPEN_DATA_STORE_TEST_PG: "host=localhost port=5432 user=postgres dbname=postgres"
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
       - run: pip install -e ".[dev]"
