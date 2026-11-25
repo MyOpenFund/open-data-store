@@ -133,3 +133,87 @@ def filing_row(**over):
     )
     base.update(over)
     return base
+
+
+def price_row(**over):
+    base = dict(
+        source_symbol="AAPL",
+        open=100.0,
+        high=102.0,
+        low=99.0,
+        close=101.0,
+        volume=1_000_000,
+        currency="USD",
+        price_basis="raw",
+        known_at_basis="session_close",
+        valid_date=date(2025, 6, 30),
+        known_at=ts("2025-06-30T20:00:00"),
+        known_at_kind="published",
+        source_code="massive",
+        source_doc_id=None,
+    )
+    base.update(over)
+    return base
+
+
+def action_row(**over):
+    base = dict(
+        source_symbol="AAPL",
+        action_type="split",
+        action_seq=0,
+        source_action_type="forward_split",
+        announce_date=date(2025, 6, 1),
+        record_date=date(2025, 6, 27),
+        pay_date=date(2025, 6, 29),
+        amount=None,
+        currency=None,
+        amount_basis=None,
+        per_share_basis=None,
+        ratio_old=1.0,
+        ratio_new=4.0,
+        spinoff_symbol=None,
+        known_at_basis="announce_date",
+        valid_date=date(2025, 6, 30),
+        known_at=ts("2025-06-01T23:59:59"),
+        known_at_kind="published",
+        source_code="massive",
+        source_doc_id=None,
+    )
+    base.update(over)
+    return base
+
+
+def snapshot_row(**over):
+    base = dict(
+        index_code="idx1",
+        source_symbol="TOKA",
+        snapshot_size=1,
+        weight=None,
+        is_member=True,
+        known_at_basis="snapshot_date",
+        valid_date=date(2025, 6, 30),
+        known_at=ts("2025-06-30T23:00:00"),
+        known_at_kind="published",
+        source_code="srcx",
+        source_doc_id=None,
+    )
+    base.update(over)
+    return base
+
+
+def identifier_row(**over):
+    base = dict(
+        instrument_id="mof:" + "1" * 32,
+        id_scheme="source_symbol",
+        id_value="srcx:TOKA",
+        valid_to=None,
+        link_reason=None,
+        known_at_basis="load_time",
+        valid_date=date(1990, 1, 1),
+        known_at=ts("2026-01-01T00:00:00"),
+        known_at_kind="published",
+        source_code="mapper",
+        source_doc_id=None,
+    )
+    base.update(over)
+    return base

@@ -18,6 +18,7 @@ Renamed on 2026-11-22 (package, import, command and environment variables): see
 pip install "myopenfund-open-data-store[writer]"     # producers: pyarrow only
 pip install "myopenfund-open-data-store[publisher]"  # store operator: DuckDB + DuckLake
 pip install "myopenfund-open-data-store[reader]"     # analyses, MCP, strategies
+pip install "myopenfund-open-data-store[recipes]"    # market-data recipes (exchange calendars)
 ```
 
 If this environment installed the old distribution (`open-data-store`, from a git URL), run
@@ -91,6 +92,76 @@ the whole table. Keep one batch per issuer, and do not merge data files
 (`ducklake_merge_adjacent_files`) without measuring: merging issuers into one file defeats the
 pruning.
 
+## Market data
+
+Six standard contracts (v1, all `fact`, partitioned by `source_code`): `prices` (raw OHLCV per
+provider series and session), `corporate_actions` (splits, dividends, spin-offs, as filed),
+`vendor_total_return` (a vendor's own total-return series: a control, and the documented fallback
+where corporate actions are missing; never mixed into `prices`),
+`index_snapshots` (index membership per snapshot date), `instrument_identifiers` (dated mappings
+of provider symbols and FIGI/ISIN/CIK to an opaque `mof:` instrument id) and `fetch_log` (what was
+fetched, with its status). Approve them on a store before producers publish.
+
+**Source registry.** Sources are declared through the `open_data_store.sources` entry-point group
+(`SourceInfo`: licence, terms URL, attribution, `access` open or restricted, and the flags
+`no_public_display` and `no_ml_training`; `code` is lowercase, `[a-z][a-z0-9_]{0,62}`).
+Restricted sources are denied by default to every served channel. The gate
+(`sources.filter_sources`) is enforced by `load_market_inputs` and by the serving layers (the
+MCP); `Store.read_asof` is **not** gated, so a caller that serves its rows filters them first,
+before any column projection. Market data is read in strict mode: a `source_code` missing from
+the registry is denied, and a `source_symbol` identifier row is denied when the source of its
+`id_value` prefix is denied. Outside strict mode a `source_code` that is not registered is open.
+
+**Recipes** are pure functions over Arrow tables (extra `pip install "myopenfund-open-data-store[recipes]"`).
+Signatures, from the submodules `market.membership`, `market.returns`, `market.coverage`,
+`market.asof` (`asof`, `latest`, `sessions`) and `market.store`:
+
+```python
+membership_intervals(snapshots, identifiers, *, index_code, as_of, staleness_days=45, precedence=())
+unresolved_members(snapshots, identifiers, *, index_code, as_of, staleness_days=45, precedence=())
+resolve_prices(prices, identifiers, *, as_of, precedence)
+resolve_actions(actions, identifiers, *, as_of, precedence)
+total_return(prices, actions, sessions, *, reinvest_at="ex_date_close")      # resolved inputs
+coverage(intervals, prices_resolved, sessions, fetch_coverage=None, *, unresolved=None,
+         max_missing_share=0.02, min_delisting_gap_sessions=5)               # -> CoverageResult
+delisting_exits(intervals, prices_resolved, sessions, *, rule="last_close", fixed_return=None,
+                post_prices=None, fetch_coverage=None, min_delisting_gap_sessions=5)
+load_market_inputs(store, *, as_of, allowed_restricted=frozenset(),
+                   identifiers_as_of=None)                                   # -> MarketInputs
+```
+
+`load_market_inputs` (`open_data_store.market.store`) reads each contract at its own major
+(`prices_v1`, ...), prices, actions, snapshots and the fetch log as-of and the identifiers latest,
+applies the strict licence gate (restricted sources dropped unless allowed, unregistered sources
+always dropped) and drops `entity_id`/`batch_id`. `identifiers_as_of` (default now, UTC) pins the identifier read to
+reproduce a load. A dataset approved but not published yet, or not approved, gives an empty table
+with its contract schema. Only the latest vintage knowable at `as_of` is kept per key: call the
+recipes with the same `as_of` as the load.
+
+Recipe outputs name instruments by `instrument_id` only: `resolve_prices` and `resolve_actions`
+keep `source_code` (provenance) but no provider symbol (`source_symbol`, `spinoff_symbol`).
+
+Coverage reasons: `ok`, `price_invalid`, `not_fetched`, `unmapped`, `source_has_no_data`,
+`recycled_at_source`, `delisted`, `session_not_published`. Total-return flags: `currency_mismatch`,
+`currency_change`, `spin_off_unvalued`, `rights_unvalued`, `action_invalid`, `gap`,
+`price_invalid`.
+
+Caller contracts:
+
+- **Pass `unresolved=unresolved_members(...)` to `coverage`.** Without it, coverage ignores
+  unmapped index members and can pass on a universe with holes. With it, each unresolved symbol
+  counts as a missing member (`per_session.unmapped`) on every session of
+  `[first_seen, valid_to)`.
+- `fetch_coverage` callers must drop superseded `error`/`partial` fetch rows: a failed row vetoes
+  a delisting whatever its order.
+- A restated snapshot that omits a symbol leaves the old row visible: producers emit
+  `is_member = false` on restatement.
+- Adapters must fill the currency of every cash action, or the cash is dropped (flagged
+  `currency_mismatch`).
+- Two symbols of one source mapped to one instrument on one date (overlapping mapping windows,
+  e.g. a venue change): `resolve_prices` / `resolve_actions` keep their rows once when every
+  value is identical, and raise otherwise. Make each source's mapping windows disjoint.
+
 ## Producers
 
 ```python
@@ -101,8 +172,9 @@ ref = write_batch(contract, table, landing_root=data_root / "landing",
 
 The writer validates the table against its contract and drops an atomic, idempotent batch in
 `landing/`. It never touches Postgres. A producer declares its own contracts through the
-`open_data_store.contracts` entry-point group; standard contracts (`fundamentals`, `entity_observations`,
-`filing_statements`, `filings`) ship with this library.
+`open_data_store.contracts` entry-point group; ten standard contracts ship with this library
+(`fundamentals`, `entity_observations`, `filing_statements`, `filings`, and the six market
+contracts of "Market data").
 
 ## Operator
 

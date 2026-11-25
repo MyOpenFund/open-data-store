@@ -79,3 +79,20 @@ prefix groups the MyOpenFund packages). Only the distribution name changes: the 
 - The NAS stack (`deploy/nas/compose.yaml`) installs `myopenfund-open-data-store[publisher]` from the
   same git URL and `OPEN_DATA_STORE_REF` as before; pip refuses a direct reference whose name
   differs from the built metadata, so use a ref at or after this rename.
+
+## 0.2.0: market data
+
+No migration. Existing contracts, fingerprints, approvals and batches are unchanged. The six new
+market contracts (`prices`, `corporate_actions`, `vendor_total_return`, `index_snapshots`,
+`instrument_identifiers`, `fetch_log`) must be approved on a store before producers publish them
+(`open-data-store contracts list` shows them). The recipes need the new optional extra
+`myopenfund-open-data-store[recipes]`.
+
+Two behaviour changes outside market data:
+
+- `conform` (the writer's and the publisher's validation): a null now passes the vocabulary
+  check of a nullable column with allowed values; it used to be refused
+  (`value_not_allowed`). Required columns still refuse nulls (`nulls_in_required`). No
+  fingerprint changes; a batch refused before only for such nulls is accepted now.
+- `Store.is_published(dataset)` is new: true when the dataset is approved and a first batch was
+  published (its table exists); `UnknownDataset` when it is not approved.

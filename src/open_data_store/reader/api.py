@@ -185,6 +185,11 @@ class Store:
         )
         return {r[0] for r in rows}
 
+    def is_published(self, dataset: str) -> bool:
+        """True when the dataset is approved and its table exists (a first batch was published).
+        Raises UnknownDataset for a dataset that is not approved."""
+        return bool(self._table_columns(self._dataset(dataset)))
+
     def describe(self, dataset: str) -> dict:
         """Everything a caller (or an MCP tool listing) needs to query a dataset correctly."""
         d = self._dataset(dataset)
