@@ -528,16 +528,79 @@ def test_duplicate_price_rows_raise_listing_keys():
         total_return(rp, ra, _sessions(date(2020, 3, 2), date(2020, 3, 3)))
 
 
-def test_two_symbols_of_one_source_on_one_instrument_day_raise():
+def test_two_symbols_of_one_source_with_different_values_raise():
     prices = pa.concat_tables(
         [
             _prices((date(2020, 3, 2), 100.0)),
-            _prices((date(2020, 3, 2), 100.0, dict(source_symbol="TOKB"))),
+            _prices((date(2020, 3, 2), 101.0, dict(source_symbol="TOKB"))),
         ]
     )
     ids = _ids(("srcx:TOKA", M1), ("srcx:TOKB", M1))
-    with pytest.raises(ValueError, match=r"srcx:TOKA.*srcx:TOKB"):
-        resolve_prices(prices, ids, as_of=AS_OF, precedence=("srcx",))
+    for precedence in (("srcx",), ()):
+        with pytest.raises(ValueError, match=r"srcx:TOKA.*srcx:TOKB") as err:
+            resolve_prices(prices, ids, as_of=AS_OF, precedence=precedence)
+        msg = str(err.value)
+        assert "mapping windows" in msg and "disjoint" in msg and "'srcx'" in msg
+        assert "pass a source precedence" not in msg
+
+
+# A venue change mapped with overlapping windows: two symbols of one source, one instrument.
+VENUE_IDS = _ids(
+    ("srcx:TOKA", M1, dict(valid_to=date(2020, 3, 4))),
+    ("srcx:TOKB", M1, dict(valid_date=date(2020, 3, 3))),
+)
+
+
+def test_two_symbols_of_one_source_with_identical_values_are_kept_once():
+    prices = pa.concat_tables(
+        [
+            _prices((date(2020, 3, 2), 100.0), (date(2020, 3, 3), 101.0, dict(volume=None))),
+            _prices((date(2020, 3, 3), 101.0, dict(source_symbol="TOKB", volume=None))),
+            _prices((date(2020, 3, 4), 102.0, dict(source_symbol="TOKB"))),
+        ]
+    )
+    for precedence in (("srcx",), ()):
+        out = resolve_prices(prices, VENUE_IDS, as_of=AS_OF, precedence=precedence)
+        assert [(r["session_date"], r["close"], r["source_code"]) for r in out.to_pylist()] == [
+            (date(2020, 3, 2), 100.0, "srcx"),
+            (date(2020, 3, 3), 101.0, "srcx"),
+            (date(2020, 3, 4), 102.0, "srcx"),
+        ]
+
+
+def test_identical_actions_of_two_symbols_of_one_source_are_kept_once():
+    actions = _actions(
+        _cash(date(2020, 3, 3), 1.0),
+        _split(date(2020, 3, 3), 1.0, 2.0),
+        _cash(date(2020, 3, 3), 1.0, source_symbol="TOKB"),
+        _split(date(2020, 3, 3), 1.0, 2.0, source_symbol="TOKB"),
+    )
+    out = resolve_actions(actions, VENUE_IDS, as_of=AS_OF, precedence=())
+    assert [(r["ex_date"], r["action_type"], r["amount"]) for r in out.to_pylist()] == [
+        (date(2020, 3, 3), "cash_dividend_regular", 1.0),
+        (date(2020, 3, 3), "split", None),
+    ]
+    # The dividend enters the return once.
+    prices = _prices((date(2020, 3, 2), 100.0), (date(2020, 3, 3), 50.0))
+    rp = resolve_prices(prices, VENUE_IDS, as_of=AS_OF, precedence=())
+    tr = total_return(rp, out, _sessions(date(2020, 3, 2), date(2020, 3, 3)))
+    assert tr.column("tr_index").to_pylist()[-1] == pytest.approx((2 * 50.0 + 2 * 1.0) / 100.0)
+
+
+@pytest.mark.parametrize(
+    "tokb",
+    [
+        [_cash(date(2020, 3, 3), 1.5, source_symbol="TOKB")],  # another amount
+        [  # one more action
+            _cash(date(2020, 3, 3), 1.0, source_symbol="TOKB"),
+            _split(date(2020, 3, 3), 1.0, 2.0, source_symbol="TOKB"),
+        ],
+    ],
+)
+def test_different_actions_of_two_symbols_of_one_source_raise(tokb):
+    actions = _actions(_cash(date(2020, 3, 3), 1.0), *tokb)
+    with pytest.raises(ValueError, match="disjoint"):
+        resolve_actions(actions, VENUE_IDS, as_of=AS_OF, precedence=())
 
 
 def test_conflict_error_lists_up_to_ten_keys():

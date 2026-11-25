@@ -6,9 +6,11 @@ the ``source_symbol`` identifiers, read latest (see ``_mapping``). Unmapped rows
 coverage recipe reports them). Outputs carry ``instrument_id`` and ``source_code`` (provenance),
 never a provider symbol. Per (instrument, date) the first source of ``precedence`` that has
 a row wins; sources absent from a non-empty ``precedence`` are ignored. With an empty
-``precedence``, two series for one (instrument, date) raise ``ValueError``; so do two series of
-the winning source (two symbols of one source mapped to one instrument on one date). Those are
-mapping errors, fixed upstream in the identifiers; the message lists up to ``MAX_LISTED`` keys.
+``precedence``, two sources for one (instrument, date) raise ``ValueError``. Two symbols of the
+winning source mapped to one instrument on one date (e.g. a venue change whose mapping windows
+overlap) are kept once when every output column of their rows is identical (for actions: the same
+set of actions); otherwise they raise ``ValueError``: make that source's mapping windows disjoint
+in the identifiers. Messages list up to ``MAX_LISTED`` keys.
 
 ``total_return`` forward-cumulates a total-return index per instrument from the resolved rows:
 base 1.0 on the instrument's first valid price session, ``tr_index(t) = tr_index(t-1) * (1 +
@@ -154,23 +156,68 @@ def _resolve(
     else:
         rank = np.zeros(len(inst), np.int32)
     rows = np.flatnonzero((inst >= 0) & (rank >= 0))
-    rows = rows[np.lexsort((rank[rows], days[rows], inst[rows]))]
-    inst, days, rank = inst[rows], days[rows], rank[rows]
-    tok = mapped.token_codes[rows]
+    src_codes = pc.dictionary_encode(visible["source_code"].combine_chunks())
+    src = src_codes.indices.to_numpy(zero_copy_only=False).astype(np.int64)
+    tok = mapped.token_codes
+    # Token last: within a run of one (instrument, date, rank), the head holds the first token.
+    rows = rows[np.lexsort((tok[rows], rank[rows], days[rows], inst[rows]))]
+    inst, days, rank, src, tok = inst[rows], days[rows], rank[rows], src[rows], tok[rows]
 
     # Runs of one (instrument, date), best rank first: keep the run's best-rank rows.
     starts = np.ones(len(rows), bool)
     starts[1:] = (inst[1:] != inst[:-1]) | (days[1:] != days[:-1])
     head = np.maximum.accumulate(np.where(starts, np.arange(len(rows)), 0))
     keep = rank == rank[head]
-    conflict = keep & (tok != tok[head])
-    if conflict.any():
-        _raise_conflict(mapped, inst, days, tok, head, keep, conflict, bool(precedence))
+    cross = keep & (src != src[head])  # several sources kept: only without a precedence
+    if cross.any():
+        heads = np.unique(head[cross])
+        hint = "" if precedence else "; pass a source precedence"
+        _raise_conflict(
+            mapped, inst, days, tok, head, keep, heads,
+            f"several series for one instrument and date ({heads.size} key(s){hint})",
+        )  # fmt: skip
+    multi = keep & (tok != tok[head])  # several symbols of one source
+    if multi.any():
+        runs = np.unique(head[multi])
+        in_run = keep & np.isin(head, runs)
+        idx = np.flatnonzero(in_run)
+        differ = _differing_runs(visible, rows[idx], head[idx], tok[idx], columns)
+        if differ.size:
+            names = src_codes.dictionary.to_pylist()
+            bad = sorted({names[src[h]] for h in differ})
+            _raise_conflict(
+                mapped, inst, days, tok, head, keep, differ,
+                "several series of one source for one instrument and date with different "
+                f"values ({differ.size} key(s)); make the mapping windows of source(s) {bad} "
+                "disjoint in the identifiers",
+            )  # fmt: skip
+        keep &= ~(in_run & (tok != tok[head]))  # identical series: keep the head's
     rows, inst = rows[keep], inst[keep]
     names = pa.array(mapped.instruments, pa.string())
     return visible.select(list(columns)).take(pa.array(rows, pa.int64())), names.take(
         pa.array(inst)
     )
+
+
+def _differing_runs(
+    visible: pa.Table, rows: np.ndarray, run: np.ndarray, tok: np.ndarray, columns: Sequence[str]
+) -> np.ndarray:
+    """Heads of the runs whose symbols do not carry identical rows (every column of ``columns``).
+
+    Rows of one symbol are distinct (the natural key is among ``columns``), so the symbols of a
+    run agree exactly when each distinct row is carried by every symbol of the run."""
+    values = [c for c in columns if c != "valid_date"]
+    sub = visible.select(values).take(pa.array(rows, pa.int64()))
+    sub = sub.append_column("__run", pa.array(run)).append_column("__tok", pa.array(tok))
+    pairs = np.unique(np.stack([run, tok]), axis=1)
+    run_ids, per_run = np.unique(pairs[0], return_counts=True)
+    groups = sub.group_by(["__run", *values], use_threads=False).aggregate(
+        [("__tok", "count_distinct")]
+    )
+    g_run = groups["__run"].to_numpy()
+    g_count = groups["__tok_count_distinct"].to_numpy()
+    expected = per_run[np.searchsorted(run_ids, g_run)]
+    return np.unique(g_run[g_count != expected])
 
 
 def _raise_conflict(
@@ -180,21 +227,16 @@ def _raise_conflict(
     tok: np.ndarray,
     head: np.ndarray,
     keep: np.ndarray,
-    conflict: np.ndarray,
-    has_precedence: bool,
+    heads: np.ndarray,
+    message: str,
 ) -> None:
-    heads = np.unique(head[conflict])
     listed = []
     for h in heads[:MAX_LISTED]:
         run = (head == h) & keep
         series = sorted({mapped.tokens[t] for t in tok[run]})
         on = _EPOCH + timedelta(days=int(days[h]))
         listed.append(f"{mapped.instruments[inst[h]]!r} on {on.isoformat()}: {series}")
-    hint = "" if has_precedence else "; pass a source precedence"
-    raise ValueError(
-        f"several series for one instrument and date ({heads.size} key(s){hint}); "
-        f"first {len(listed)}: " + "; ".join(listed)
-    )
+    raise ValueError(f"{message}; first {len(listed)}: " + "; ".join(listed))
 
 
 def _output(

@@ -145,6 +145,9 @@ Caller contracts:
   `is_member = false` on restatement.
 - Adapters must fill the currency of every cash action, or the cash is dropped (flagged
   `currency_mismatch`).
+- Two symbols of one source mapped to one instrument on one date (overlapping mapping windows,
+  e.g. a venue change): `resolve_prices` / `resolve_actions` keep their rows once when every
+  value is identical, and raise otherwise. Make each source's mapping windows disjoint.
 
 ## Producers
 
