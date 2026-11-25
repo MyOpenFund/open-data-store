@@ -213,3 +213,12 @@ def test_nas_compose_installs_the_published_distribution_name():
     text = (ROOT / "deploy" / "nas" / "compose.yaml").read_text(encoding="utf-8")
     assert '"myopenfund-open-data-store[publisher] @ git+' in text
     assert '"open-data-store[' not in text
+
+
+def test_recipes_extra_pins_its_runtime():
+    extras = _project()["optional-dependencies"]
+    for name in ("recipes", "dev"):
+        deps = extras[name]
+        assert "exchange_calendars==4.13.2" in deps
+        assert any(re.fullmatch(r"numpy(>=[\d.]+)?", d) for d in deps), deps
+        assert any(d.startswith("pandas") and "<4" in d for d in deps), deps
