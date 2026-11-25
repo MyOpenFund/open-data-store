@@ -179,7 +179,9 @@ INDEX_SNAPSHOTS = _contract(
     "index_snapshots",
     "One row per index member and snapshot. valid_date is the snapshot date as filed.",
     (
-        Column("index_code", pa.string(), nullable=False, doc="Index code in the source registry."),
+        Column(
+            "index_code", pa.string(), nullable=False, doc="Index code, as the source names it."
+        ),
         _SOURCE_SYMBOL,
         Column("snapshot_size", pa.int32(), nullable=False, doc="Members in this snapshot."),
         Column("weight", pa.float64(), doc="Member weight; null when the source has none."),
@@ -235,8 +237,8 @@ FETCH_LOG = _contract(
     (
         _SOURCE_SYMBOL,
         Column("fetch_id", pa.string(), nullable=False, doc="Identifier of the fetch run."),
-        Column("requested_from", pa.date32(), nullable=False, doc="Start of the requested range."),
-        Column("requested_to", pa.date32(), nullable=False, doc="End of the requested range."),
+        Column("requested_from", pa.date32(), doc="Start of the requested range; null when none."),
+        Column("requested_to", pa.date32(), doc="End of the requested range; null when none."),
         Column("returned_from", pa.date32(), doc="Null when nothing was returned."),
         Column("returned_to", pa.date32(), doc="Null when nothing was returned."),
         Column(

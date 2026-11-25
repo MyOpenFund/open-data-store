@@ -33,6 +33,21 @@ FINGERPRINTS_BEFORE = {
     "fundamentals": "1a828cfc77c20239f858a9582d8ea6990991782f39d84cc3ea8ec1f4ee35b951",
 }
 
+# The six market contracts at 1.0.0 (fetch_log with a nullable requested range). A change here is
+# a new MAJOR, or a MINOR the publisher accepts: never an edit of this dict alone.
+MARKET_FINGERPRINTS = {
+    "prices": "2ac2c813d515a3b3c3fdbba8ee6b5b700078acbb25fcadf6a8c9b67e740559c8",
+    "corporate_actions": "1d5dbb8cdcb23e913d4756a7fda325eedd5c769c5073fba7b011f6cda0ad72f4",
+    "vendor_total_return": "e0fd9d4f6c84553829d9f7f9896ff6f288cb850492e522f0ac0e04065856b7c0",
+    "index_snapshots": "56a538f32d9b9eada0571ace47caf14eb8e46cc24678a25b31d0723239be7bb9",
+    "instrument_identifiers": "034169f616fdee7bb42d8c9441b2ce8d6c3bbd2c97edf25aed694fb8850a721d",
+    "fetch_log": "0cdbfee56fa30b40e6e6017ab836128cebf8eb1bff7f069e2d7edc585521445d",
+}
+
+
+def test_market_fingerprints_pinned():
+    assert {c.name: c.fingerprint() for c in MARKET_CONTRACTS} == MARKET_FINGERPRINTS
+
 
 def test_market_contracts_validate():
     assert len(MARKET_CONTRACTS) == 6
@@ -221,3 +236,11 @@ def test_column_types_are_pinned():
     assert PRICES.column("close").type == pa.float64()
     assert PRICES.column("volume").type == pa.int64()
     assert CORPORATE_ACTIONS.column("action_seq").type == pa.int16()
+
+
+def test_fetch_log_requested_range_is_nullable():
+    # A fetch of "everything the source has" requests no range.
+    for col in ("requested_from", "requested_to"):
+        assert FETCH_LOG.column(col).nullable
+    row = dict(_rows()[FETCH_LOG], requested_from=None, requested_to=None)
+    assert conform(FETCH_LOG, table(FETCH_LOG, [row]), now=NOW).num_rows == 1
